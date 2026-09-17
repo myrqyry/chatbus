@@ -99,6 +99,8 @@ const isRenderableTimelineEvent = (event: ChatEvent): boolean => {
     case 'gift-subscription':
     case 'cheer':
     case 'raid':
+    case 'follow':
+    case 'donation':
     case 'reward-redemption':
     case 'system':
       return true;

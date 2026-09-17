@@ -372,5 +372,121 @@ export function normalizeTwitchEventSubNotification(
     return normalizeNotification(event, envelope, context);
   }
 
+  if (subscriptionType === 'channel.update') {
+    return {
+      id: envelope.metadata.message_id,
+      type: 'channel-update',
+      platform: 'twitch',
+      channelId,
+      channelName,
+      timestamp,
+      data: {
+        title: stringValue(event.title),
+        language: stringValue(event.language),
+        categoryId: stringValue(event.category_id),
+        categoryName: stringValue(event.category_name),
+        contentClassificationLabels: Array.isArray(event.content_classification_labels)
+          ? event.content_classification_labels.filter((value): value is string => typeof value === 'string')
+          : [],
+      },
+      raw: envelope,
+    };
+  }
+
+  if (subscriptionType === 'stream.online' || subscriptionType === 'stream.offline') {
+    return {
+      id: stringValue(event.id) ?? envelope.metadata.message_id,
+      type: subscriptionType === 'stream.online' ? 'stream-online' : 'stream-offline',
+      platform: 'twitch',
+      channelId,
+      channelName,
+      timestamp,
+      data: {
+        streamId: stringValue(event.id),
+        streamType: stringValue(event.type),
+        startedAt: stringValue(event.started_at),
+      },
+      raw: envelope,
+    };
+  }
+
+  if (subscriptionType === 'channel.follow') {
+    const username = stringValue(event.user_login);
+    const user: ChatUser | undefined = username ? {
+      platform: 'twitch',
+      id: stringValue(event.user_id),
+      username,
+      displayName: stringValue(event.user_name),
+      raw: event,
+    } : undefined;
+    return {
+      id: envelope.metadata.message_id,
+      type: 'follow',
+      platform: 'twitch',
+      channelId,
+      channelName,
+      timestamp,
+      user,
+      data: { followedAt: stringValue(event.followed_at) },
+      raw: envelope,
+    };
+  }
+
+  if (subscriptionType === 'channel.channel_points_custom_reward_redemption.add') {
+    const username = stringValue(event.user_login);
+    const user: ChatUser | undefined = username ? {
+      platform: 'twitch',
+      id: stringValue(event.user_id),
+      username,
+      displayName: stringValue(event.user_name),
+      raw: event,
+    } : undefined;
+    return {
+      id: stringValue(event.id) ?? envelope.metadata.message_id,
+      type: 'reward-redemption',
+      platform: 'twitch',
+      channelId,
+      channelName,
+      timestamp,
+      user,
+      data: {
+        redemptionId: stringValue(event.id),
+        userInput: stringValue(event.user_input),
+        status: stringValue(event.status),
+        redeemedAt: stringValue(event.redeemed_at),
+        reward: asRecord(event.reward) ?? undefined,
+      },
+      raw: envelope,
+    };
+  }
+
+  if (subscriptionType === 'channel.ban') {
+    const username = stringValue(event.user_login);
+    const user: ChatUser | undefined = username ? {
+      platform: 'twitch',
+      id: stringValue(event.user_id),
+      username,
+      displayName: stringValue(event.user_name),
+      raw: event,
+    } : undefined;
+    return {
+      id: envelope.metadata.message_id,
+      type: event.is_permanent === true ? 'user-ban' : 'user-timeout',
+      platform: 'twitch',
+      channelId,
+      channelName,
+      timestamp,
+      user,
+      data: {
+        reason: stringValue(event.reason),
+        bannedAt: stringValue(event.banned_at),
+        endsAt: stringValue(event.ends_at),
+        moderatorUserId: stringValue(event.moderator_user_id),
+        moderatorUsername: stringValue(event.moderator_user_login),
+      },
+      raw: envelope,
+    };
+  }
+
   return null;
 }

@@ -66,6 +66,14 @@ describe('Kick protocol', () => {
       event: 'App\\Events\\ChatMessageEvent',
       data: JSON.stringify({ id: 'broken' }),
     }))).toBeNull();
+    expect(parseKickPusherFrame(JSON.stringify({
+      event: 'App\\Events\\ChannelSubscriptionEvent',
+      data: JSON.stringify({ id: 99, user: { id: 8, username: 'subscriber' } }),
+    }))).toMatchObject({ type: 'ChannelSubscription' });
+    expect(parseKickPusherFrame(JSON.stringify({
+      event: 'App\\Events\\LuckyUsersWhoGotGiftSubscriptionsEvent',
+      data: JSON.stringify({ gifted_usernames: ['lucky'] }),
+    }))).toMatchObject({ type: 'LuckyGiftedSubscriptions' });
   });
 });
 
@@ -147,6 +155,27 @@ describe('Kick normalization', () => {
       data: { kind: 'host', host_username: 'hoster', number_viewers: 12 },
     });
   });
+
+  it('normalizes channel-level subscription events used outside the chatroom feed', () => {
+    expect(normalizeKickEvent({
+      type: 'ChannelSubscription',
+      data: { id: 99, user: { id: 8, username: 'subscriber' } },
+    })).toMatchObject({
+      id: '99',
+      type: 'subscription',
+      user: { id: '8', username: 'subscriber' },
+      data: { kind: 'channel-subscription' },
+    });
+    expect(normalizeKickEvent({
+      type: 'LuckyGiftedSubscriptions',
+      data: { id: 'gift-1', gifter_username: 'gifter', gifted_usernames: ['lucky'] },
+    })).toMatchObject({
+      id: 'gift-1',
+      type: 'gift-subscription',
+      user: { username: 'gifter' },
+      data: { kind: 'lucky-gift-subscriptions', giftedUsernames: ['lucky'] },
+    });
+  });
 });
 
 describe('Kick socket lifecycle', () => {
@@ -185,6 +214,7 @@ describe('Kick socket lifecycle', () => {
 
     ws.emitMessage(JSON.stringify({
       event: 'pusher_internal:subscription_succeeded',
+      channel: 'chatrooms.42.v2',
       data: '{}',
     }));
     expect(states.at(-1)).toBe('connected');
@@ -192,6 +222,39 @@ describe('Kick socket lifecycle', () => {
     vi.advanceTimersByTime(95_000);
     expect(ws.closeCount).toBe(0);
 
+    handle.close();
+  });
+
+  it('subscribes to both chatroom and channel feeds before declaring readiness', () => {
+    const states: string[] = [];
+    const handle = createKickSocket(42, {
+      channelId: '99',
+      onStateChange: (state) => states.push(state),
+    });
+    const ws = MockWebSocket.instances[0];
+    ws.emitOpen();
+    ws.emitMessage(JSON.stringify({
+      event: 'pusher:connection_established',
+      data: JSON.stringify({ socket_id: '1.2', activity_timeout: 120 }),
+    }));
+    expect(ws.sent.map((entry) => JSON.parse(entry).data.channel)).toEqual([
+      'chatrooms.42.v2',
+      'channel.99',
+    ]);
+
+    ws.emitMessage(JSON.stringify({
+      event: 'pusher_internal:subscription_succeeded',
+      channel: 'chatrooms.42.v2',
+      data: '{}',
+    }));
+    expect(states.at(-1)).toBe('connecting');
+
+    ws.emitMessage(JSON.stringify({
+      event: 'pusher_internal:subscription_succeeded',
+      channel: 'channel.99',
+      data: '{}',
+    }));
+    expect(states.at(-1)).toBe('connected');
     handle.close();
   });
 
@@ -224,6 +287,7 @@ describe('Kick socket lifecycle', () => {
     }));
     third.emitMessage(JSON.stringify({
       event: 'pusher_internal:subscription_succeeded',
+      channel: 'chatrooms.42.v2',
       data: '{}',
     }));
     third.emitClose();

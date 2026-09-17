@@ -49,6 +49,11 @@ export function createKickSocket(
   const appKey = options.appKey ?? DEFAULT_APP_KEY;
   const baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
   const configuredInactivityTimeoutMs = options.inactivityTimeoutMs ?? DEFAULT_INACTIVITY_TIMEOUT_MS;
+  const desiredChannels = [...new Set([
+    `chatrooms.${chatroomId}.v2`,
+    ...(options.channelId?.trim() ? [`channel.${options.channelId.trim()}`] : []),
+    ...(options.additionalChannels ?? []).map((channel) => channel.trim()).filter(Boolean),
+  ])];
 
   let socket: WebSocket | null = null;
   let stopped = false;
@@ -58,6 +63,7 @@ export function createKickSocket(
   let lastActivityAt = Date.now();
   let negotiatedActivityTimeoutMs: number | null = null;
   let stableConnection = false;
+  let pendingSubscriptions = new Set<string>();
 
   const clearReconnectTimer = () => {
     if (reconnectTimer !== null) {
@@ -100,10 +106,13 @@ export function createKickSocket(
     if (envelope && typeof envelope.event === 'string') {
       if (envelope.event === 'pusher:connection_established') {
         negotiatedActivityTimeoutMs = parseActivityTimeoutMs(envelope.data);
-        current.send(JSON.stringify({
-          event: 'pusher:subscribe',
-          data: { auth: '', channel: `chatrooms.${chatroomId}.v2` },
-        }));
+        pendingSubscriptions = new Set(desiredChannels);
+        for (const channel of desiredChannels) {
+          current.send(JSON.stringify({
+            event: 'pusher:subscribe',
+            data: { auth: '', channel },
+          }));
+        }
         return;
       }
 
@@ -115,7 +124,11 @@ export function createKickSocket(
       if (envelope.event === 'pusher:pong') return;
 
       if (envelope.event === 'pusher_internal:subscription_succeeded') {
-        markStableConnection(current);
+        const channel = typeof (envelope as { channel?: unknown }).channel === 'string'
+          ? (envelope as { channel: string }).channel
+          : undefined;
+        if (channel) pendingSubscriptions.delete(channel);
+        if (pendingSubscriptions.size === 0) markStableConnection(current);
         return;
       }
 
@@ -124,9 +137,10 @@ export function createKickSocket(
       }
     }
 
-    // If Kick starts delivering application events without a subscription-success
-    // control frame, the connection is demonstrably usable and may safely reset backoff.
-    markStableConnection(current);
+    // Application events can arrive while another requested Pusher channel is still
+    // confirming. Process them, but do not claim the whole connector is ready until
+    // every desired subscription has succeeded.
+    if (pendingSubscriptions.size === 0) markStableConnection(current);
     options.onMessage?.(event.data);
   };
 
@@ -136,6 +150,7 @@ export function createKickSocket(
     lastActivityAt = Date.now();
     negotiatedActivityTimeoutMs = null;
     stableConnection = false;
+    pendingSubscriptions = new Set();
 
     const next = new WebSocket(socketUrl(appKey, baseUrl));
     socket = next;

@@ -3,6 +3,7 @@ import {
   DEFAULT_TWITCH_CHAT_SUBSCRIPTIONS,
   TWITCH_CAPABILITY_REGISTRY,
   planTwitchCapabilities,
+  twitchSubscriptionMissingScopeRequirements,
 } from '../src/index';
 
 describe('Twitch capability planning', () => {
@@ -47,7 +48,7 @@ describe('Twitch capability planning', () => {
       type: 'channel.follow',
       version: '2',
       ready: false,
-      handledByChatbus: false,
+      handledByChatbus: true,
       conditionValues: {
         broadcaster_user_id: 'broadcaster',
         moderator_user_id: 'moderator',
@@ -100,4 +101,29 @@ describe('Twitch capability planning', () => {
     ]);
     expect(plan.missingScopeRequirements).toEqual([]);
   });
+
+  it('plans reward redemptions with read/manage scope alternatives', () => {
+    const plan = planTwitchCapabilities(['rewards'], {
+      broadcasterUserId: 'broadcaster',
+      userId: 'reader',
+      scopes: ['channel:manage:redemptions'],
+    });
+
+    expect(plan.capabilities[0]).toMatchObject({ id: 'rewards', ready: true, partial: false });
+    expect(plan.subscriptions[0]).toMatchObject({
+      type: 'channel.channel_points_custom_reward_redemption.add',
+      handledByChatbus: true,
+      ready: true,
+      conditionValues: { broadcaster_user_id: 'broadcaster' },
+    });
+    expect(twitchSubscriptionMissingScopeRequirements(
+      ['channel.channel_points_custom_reward_redemption.add'],
+      ['channel:manage:redemptions'],
+    )).toEqual([]);
+    expect(twitchSubscriptionMissingScopeRequirements(
+      ['channel.channel_points_custom_reward_redemption.add'],
+      [],
+    )).toEqual([['channel:read:redemptions', 'channel:manage:redemptions']]);
+  });
+
 });

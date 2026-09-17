@@ -30,6 +30,7 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
 
   const socket = createKickSocket(channel.chatroomId, {
     ...options.socket,
+    channelId: channel.channelId,
     onStateChange: options.onStateChange,
     onError: options.onError,
     onMessage: (frame) => {
