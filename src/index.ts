@@ -115,6 +115,17 @@ export { fetchChannelEmotes, fetchChannelEmotesDetailed } from './emotes/loader'
 export { CACHE_DURATION_MS, clearCachedEmotes } from './emotes/cache';
 export type { ProviderOptions, ProviderResult } from './types/providers';
 
+
+export { createChatBus } from './bus';
+export type {
+  ChatBus,
+  ChatBusConnectionHandle,
+  ChatBusConnectionSpec,
+  ChatBusConnectionState,
+  ChatBusErrorContext,
+  ChatBusOptions,
+} from './bus';
+
 export {
   ChatTimeline,
   DEFAULT_CHAT_TIMELINE_LIMIT,
@@ -156,10 +167,12 @@ export { parseKickPusherFrame } from './platforms/kick/protocol';
 export { createKickSocket, kickReconnectDelay } from './platforms/kick/socket';
 export type {
   KickChannelInfo,
+  KickChannelSubscriptionPayload,
   KickChatConnection,
   KickChatMessagePayload,
   KickConnectOptions,
   KickGiftedSubscriptionsPayload,
+  KickLuckyGiftedSubscriptionsPayload,
   KickMessageDeletedPayload,
   KickNormalizeContext,
   KickPinnedMessagePayload,
@@ -271,8 +284,14 @@ export {
   createTwitchEventSubSubscription,
   DEFAULT_TWITCH_CHAT_SUBSCRIPTIONS,
   subscribeTwitchChat,
+  twitchSubscriptionMissingScopeRequirements,
   twitchSubscriptionRequiredScopes,
+  twitchSubscriptionScopeRequirements,
+  TWITCH_FOLLOW_SUBSCRIPTIONS,
   TWITCH_HYPE_TRAIN_SUBSCRIPTIONS,
+  TWITCH_MODERATION_SUBSCRIPTIONS,
+  TWITCH_REWARD_SUBSCRIPTIONS,
+  TWITCH_STATE_SUBSCRIPTIONS,
 } from './platforms/twitch/subscriptions';
 export type {
   TwitchAuth,
@@ -291,7 +310,11 @@ export type {
   TwitchEventSubSocketOptions,
   TwitchEventSubSubscription,
   TwitchEventSubSubscriptionType,
+  TwitchFollowerSubscriptionType,
   TwitchHypeTrainSubscriptionType,
+  TwitchModerationSubscriptionType,
+  TwitchRewardSubscriptionType,
+  TwitchStateSubscriptionType,
   TwitchMessageFragmentPayload,
   TwitchNormalizeContext,
   TwitchNormalizedMessage,
@@ -299,3 +322,19 @@ export type {
   TwitchSubscriptionStateChange,
   TwitchTokenValidation,
 } from './platforms/twitch/types';
+
+
+export { connectYouTubeChat, resolveYouTubeLiveChat } from './platforms/youtube/connect';
+export { normalizeYouTubeLiveChatMessage } from './platforms/youtube/normalize';
+export type {
+  YouTubeChatConnection,
+  YouTubeConnectOptions,
+  YouTubeLiveChatAuthorDetails,
+  YouTubeLiveChatListResponse,
+  YouTubeLiveChatMessageResource,
+  YouTubeLiveChatMessageSnippet,
+  YouTubeNormalizeContext,
+  YouTubeResolvedLiveChat,
+  YouTubeSuperChatDetails,
+  YouTubeSuperStickerDetails,
+} from './platforms/youtube/types';

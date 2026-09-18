@@ -5,12 +5,14 @@ EventSub WebSocket transport (`connectTwitchChat()`), not `tmi.js`. Needs runtim
 ## Subscriptions
 
 - Default set: messages, deletes, notifications (subs/gifts/raids), settings, full clears, per-user clears. Duplicates suppressed by `message_id`. Server reconnect URLs = handoff (old socket lives until new welcome).
+- Optional normalized subscriptions include channel metadata updates, stream online/offline, follows, Channel Points reward redemptions, channel bans/timeouts, and Hype Train. Never add them to default chat implicitly.
 - `connection.subscriptions()` / `cheermotes()` / `onSubscriptionStateChange` expose session state; revocations drop from state.
 - Cheermote enrichment from Helix needs no extra scope/secret; may load in background or via injected `cheermotes`/`getCheermotes`.
+- `channel.ban` EventSub v1 specifically requires `channel:moderate`; do not replace it with the `moderator:read:banned_users` scope used by the separate `channel.moderate` capability.
 
 ## Capabilities (`planTwitchCapabilities()`)
 
-Pure planner: records EventSub type/version, condition shape, scope alternatives, whether Chatbus normalizes it. Un-normalized capabilities stay descriptive — never silently broaden permissions/runtime of a chat connection.
+Pure planner: records EventSub type/version, condition shape, scope alternatives, whether Chatbus normalizes it. Reward redemptions accept `channel:read:redemptions` OR `channel:manage:redemptions`; follow uses the moderator condition. Detailed `channel.moderate` remains descriptive. Never silently broaden permissions/runtime of a chat connection.
 
 ## Hype Train (opt-in)
 

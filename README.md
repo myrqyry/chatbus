@@ -2,12 +2,49 @@
 
 ![Chatbus — a chat bus with cat-ear accents and message windows](assets/chatbus.png)
 
-`@myrqyry/chatbus` is a framework-neutral livestream chat substrate shared by
-the Noita and Sketchy overlays. It owns native and third-party emote discovery,
-message fragments, identity metadata, normalized chat events, platform
-connection lifecycle, live provider and entitlement state, capability planning,
-deterministic test/replay utilities, and bounded chat timeline state while
-applications keep their own rendering models.
+`@myrqyry/chatbus` is a framework-neutral livestream social substrate shared by
+the Noita and Sketchy overlays and suitable for desktop/agent consumers. It owns
+Twitch, Kick, and YouTube Live transports; native and third-party emote discovery;
+message fragments; identity metadata; normalized social events; platform
+connection lifecycle; live provider and entitlement state; capability planning;
+deterministic test/replay utilities; and bounded chat timeline state while
+applications keep their own rendering and social-cognition models.
+
+## Multi-platform connection manager
+
+Individual connectors remain usable directly, but `createChatBus()` provides a
+thin lifecycle layer for applications that need multiple simultaneous platforms.
+It owns connection identity and aggregate state without hiding platform-specific
+configuration or broadening permissions.
+
+```ts
+import { createChatBus } from '@myrqyry/chatbus';
+
+const bus = createChatBus({
+  onEvent: handleSocialEvent,
+  onConnectionStateChange: (connection) => {
+    console.log(connection.id, connection.state);
+  },
+});
+
+await bus.connect({
+  id: 'twitch-main',
+  platform: 'twitch',
+  options: { channel: 'ExampleChannel', accessToken: twitchToken },
+});
+
+await bus.connect({
+  id: 'youtube-main',
+  platform: 'youtube',
+  options: { videoId: youtubeVideoId, apiKey: youtubeApiKey },
+});
+
+// Later: closes every managed connection.
+bus.close();
+```
+
+Duplicate IDs are rejected rather than silently replacing a live connection.
+Transport-specific connectors still own their own reconnect behavior.
 
 ## Emote loader
 
@@ -267,9 +304,14 @@ console.log(plan.missingScopeRequirements);
 console.log(plan.suggestedScopes);
 ```
 
-Capabilities whose EventSub payloads are not normalized by `Chatbus` remain
-descriptive instead of silently broadening the permissions or runtime behavior
-of ordinary chat connections.
+In addition to normal chat and Hype Train events, Chatbus can now normalize
+opt-in `channel.update`, `stream.online`, `stream.offline`, `channel.follow`,
+custom Channel Points reward redemptions, and `channel.ban` events. The planner
+keeps OAuth alternatives explicit; for example, reward redemptions accept either
+`channel:read:redemptions` or `channel:manage:redemptions`. Detailed
+`channel.moderate` planning remains descriptive until its wider action surface is
+normalized. None of these optional capabilities is added to the default chat
+subscription set.
 
 ### Opt-in Hype Train events
 
@@ -304,6 +346,39 @@ All three phases normalize to `type: 'hype-train'` with structured level,
 progress, goal, contribution, timing, train type, and shared-train metadata when
 Twitch supplies it. Each notification is independently meaningful; consumers
 must not assume `begin` always arrives before `progress`.
+
+## YouTube Live chat
+
+`connectYouTubeChat()` provides a browser/Electron-friendly YouTube Live Chat
+connector using the Data API's paginated live-chat feed. It accepts either a
+YouTube API key or OAuth access token, honors the server-provided polling
+interval, follows continuation tokens, reconnects with bounded backoff, and can
+skip the initial history page for overlay-style consumers.
+
+```ts
+import { connectYouTubeChat } from '@myrqyry/chatbus';
+
+const youtube = await connectYouTubeChat({
+  videoId: 'VIDEO_ID',
+  apiKey: youtubeApiKey,
+  emitInitialHistory: false,
+  onEvent: handleSocialEvent,
+});
+
+// A known liveChatId can be supplied directly instead of videoId.
+youtube.close();
+```
+
+Normalized YouTube events include text messages, memberships and milestone
+messages, gifted memberships, Super Chats, Super Stickers, Jewels gifts,
+message deletions/tombstones, bans/timeouts, members-only room-state changes,
+polls, and chat-end/offline state. Monetary events use the neutral `donation`
+event type rather than being mislabeled as Twitch Bits. Mutable same-ID gift
+combos and active poll updates include their changing state in deduplication so
+updates are not discarded as duplicate deliveries.
+
+See [YouTube Live chat](docs/youtube-live-chat.md) for transport and event
+semantics.
 
 ## Test, record, and replay normalized events
 
@@ -374,7 +449,11 @@ instead of being mislabeled.
 
 The Pusher lifecycle honors the negotiated `activity_timeout`, waits for the
 handshake before subscribing, and only resets reconnect backoff after the
-connection becomes genuinely usable.
+connection becomes genuinely usable. When a resolved Kick channel ID is
+available, the connector subscribes to both `chatrooms.<id>.v2` and
+`channel.<channelId>` and waits for both acknowledgements before reporting
+`connected`; this preserves channel-level subscription/gift events that are not
+carried by the chatroom feed alone.
 
 ## Precedence
 
@@ -412,7 +491,8 @@ be advanced deliberately after a verified Chatbus change lands.
 
 ## Next steps
 
-Later shared work can cover additional authenticated Twitch moderation event
-normalizers, processed-asset caching, more platform adapters, a separate shared
-connection/relay companion, and platform-specific write/send APIs without
-forcing those concerns into read-only overlay consumers.
+Later shared work can cover the remaining detailed Twitch moderation action
+surface, processed-asset caching, additional platform adapters, a separate
+shared connection/relay companion, desktop OAuth/account lifecycle helpers, and
+platform-specific write/send/reply APIs without forcing privileged concerns into
+read-only overlay consumers.

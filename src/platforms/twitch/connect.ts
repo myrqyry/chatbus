@@ -7,7 +7,7 @@ import { createTwitchEventSubSocket } from './socket';
 import {
   DEFAULT_TWITCH_CHAT_SUBSCRIPTIONS,
   subscribeTwitchChat,
-  twitchSubscriptionRequiredScopes,
+  twitchSubscriptionMissingScopeRequirements,
 } from './subscriptions';
 import type {
   TwitchChatConnection,
@@ -52,10 +52,13 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
     userId: options.userId,
     signal: options.signal,
   });
-  const missingScopes = twitchSubscriptionRequiredScopes(requestedSubscriptions)
-    .filter((scope) => !auth.scopes?.includes(scope));
-  if (missingScopes.length > 0) {
-    throw new Error(`Twitch user access token is missing required scope${missingScopes.length === 1 ? '' : 's'}: ${missingScopes.join(', ')}`);
+  const missingScopeRequirements = twitchSubscriptionMissingScopeRequirements(
+    requestedSubscriptions,
+    auth.scopes ?? [],
+  );
+  if (missingScopeRequirements.length > 0) {
+    const descriptions = missingScopeRequirements.map((group) => group.join(' or '));
+    throw new Error(`Twitch user access token is missing required scope${descriptions.length === 1 ? '' : ' groups'}: ${descriptions.join(', ')}`);
   }
 
   const channel = options.broadcasterUserId

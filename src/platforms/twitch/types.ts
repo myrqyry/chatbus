@@ -14,9 +14,22 @@ export type TwitchHypeTrainSubscriptionType =
   | 'channel.hype_train.progress'
   | 'channel.hype_train.end';
 
+export type TwitchStateSubscriptionType =
+  | 'channel.update'
+  | 'stream.online'
+  | 'stream.offline';
+
+export type TwitchFollowerSubscriptionType = 'channel.follow';
+export type TwitchRewardSubscriptionType = 'channel.channel_points_custom_reward_redemption.add';
+export type TwitchModerationSubscriptionType = 'channel.ban';
+
 export type TwitchEventSubSubscriptionType =
   | TwitchChatSubscriptionType
-  | TwitchHypeTrainSubscriptionType;
+  | TwitchHypeTrainSubscriptionType
+  | TwitchStateSubscriptionType
+  | TwitchFollowerSubscriptionType
+  | TwitchRewardSubscriptionType
+  | TwitchModerationSubscriptionType;
 
 export interface TwitchAuth {
   clientId: string;

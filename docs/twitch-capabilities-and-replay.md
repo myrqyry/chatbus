@@ -6,7 +6,7 @@
 import { planTwitchCapabilities } from '@myrqyry/chatbus';
 
 const plan = planTwitchCapabilities(
-  ['chat', 'followers', 'moderation'],
+  ['chat', 'followers', 'rewards', 'moderation'],
   {
     broadcasterUserId,
     userId,
@@ -25,11 +25,11 @@ for (const subscription of plan.subscriptions) {
 }
 ```
 
-Each `TwitchScopeRequirement` is an OR-group. Every group attached to a subscription must be satisfied, but any one scope inside a group is sufficient. This is important for Twitch moderation subscriptions, where read/manage scopes are often alternatives.
+Each `TwitchScopeRequirement` is an OR-group. Every group attached to a subscription must be satisfied, but any one scope inside a group is sufficient. This matters for capabilities such as Channel Points redemptions, where `channel:read:redemptions` and `channel:manage:redemptions` are alternatives, and for the larger moderation surface.
 
-The planner is descriptive. A subscription being `ready` means the supplied token/scopes and IDs satisfy the known EventSub requirements; it does not mean `Chatbus` already normalizes that event. `handledByChatbus` distinguishes subscriptions currently mapped to normalized `ChatEvent`s from capability definitions that are present for planning future optional packs.
+The planner is descriptive. A subscription being `ready` means the supplied token/scopes and IDs satisfy the known EventSub requirements; it does not automatically mean `Chatbus` normalizes that event. `handledByChatbus` distinguishes runtime-normalized subscriptions from definitions that are present for future optional packs. Chatbus currently normalizes default chat, Hype Train, channel updates, stream online/offline, follows, custom reward redemptions, and `channel.ban`; detailed `channel.moderate` remains planner-only.
 
-The registry intentionally does not broaden `connectTwitchChat()` authentication. Normal chat keeps its small `user:read:chat` contract.
+The registry intentionally does not broaden the default `connectTwitchChat()` subscription set. Normal chat keeps its small `user:read:chat` contract; optional requested subscriptions add only their documented scope requirements. `connectTwitchChat()` remains a chat-oriented authenticated connector, so token validation still requires `user:read:chat` even when an application requests additional state events.
 
 ## Test and replay events
 

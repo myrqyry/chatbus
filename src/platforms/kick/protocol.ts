@@ -4,6 +4,8 @@ const EVENT_NAME_TO_TYPE: Record<string, keyof KickProtocolDataByType> = {
   'App\\Events\\ChatMessageEvent': 'ChatMessage',
   'App\\Events\\SubscriptionEvent': 'Subscription',
   'App\\Events\\GiftedSubscriptionsEvent': 'GiftedSubscriptions',
+  'App\\Events\\ChannelSubscriptionEvent': 'ChannelSubscription',
+  'App\\Events\\LuckyUsersWhoGotGiftSubscriptionsEvent': 'LuckyGiftedSubscriptions',
   'App\\Events\\StreamHostEvent': 'StreamHost',
   'App\\Events\\MessageDeletedEvent': 'MessageDeleted',
   'App\\Events\\UserBannedEvent': 'UserBanned',

@@ -54,6 +54,20 @@ const userFromSender = (sender: KickSender): ChatUser => {
   };
 };
 
+
+const channelEventUser = (value: unknown): ChatUser | undefined => {
+  if (!isRecord(value)) return undefined;
+  const nested = isRecord(value.user) ? value.user : isRecord(value.subscriber) ? value.subscriber : value;
+  const username = typeof nested.username === 'string'
+    ? nested.username
+    : typeof nested.slug === 'string'
+      ? nested.slug
+      : undefined;
+  if (!username) return undefined;
+  const id = typeof nested.id === 'string' || typeof nested.id === 'number' ? String(nested.id) : undefined;
+  return { platform: 'kick', id, username, displayName: username, raw: value };
+};
+
 const timestampFrom = (value: string | undefined, now: () => number): number => {
   if (value) {
     const timestamp = Date.parse(value);
@@ -178,6 +192,28 @@ export function normalizeKickEvent(
             }
           : undefined,
         data: { giftedUsernames: event.data.gifted_usernames ?? [] },
+      };
+    case 'ChannelSubscription':
+      return {
+        ...base,
+        id: event.data.id == null ? undefined : String(event.data.id),
+        type: 'subscription',
+        user: channelEventUser(event.data),
+        data: { kind: 'channel-subscription', event: event.data },
+      };
+    case 'LuckyGiftedSubscriptions':
+      return {
+        ...base,
+        id: event.data.id == null ? undefined : String(event.data.id),
+        type: 'gift-subscription',
+        user: event.data.gifter_username
+          ? { platform: 'kick', username: event.data.gifter_username, displayName: event.data.gifter_username }
+          : undefined,
+        data: {
+          kind: 'lucky-gift-subscriptions',
+          giftedUsernames: event.data.gifted_usernames ?? [],
+          event: event.data,
+        },
       };
     case 'StreamHost':
       return { ...base, type: 'system', data: { kind: 'host', ...event.data } };

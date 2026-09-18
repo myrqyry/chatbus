@@ -6,6 +6,7 @@ export type TwitchCapabilityId =
   | 'stream-state'
   | 'hype-train'
   | 'followers'
+  | 'rewards'
   | 'moderation';
 
 export type TwitchEventSubConditionKind = 'chat-user' | 'broadcaster' | 'moderator';
@@ -114,14 +115,27 @@ export const TWITCH_CAPABILITY_REGISTRY: Readonly<Record<TwitchCapabilityId, Twi
       version: '2',
       condition: 'broadcaster',
       scopeRequirements: [],
+      normalizedEventTypes: ['channel-update'],
     }],
   },
   'stream-state': {
     id: 'stream-state',
     description: 'Observe stream online/offline transitions.',
     subscriptions: [
-      { type: 'stream.online', version: '1', condition: 'broadcaster', scopeRequirements: [] },
-      { type: 'stream.offline', version: '1', condition: 'broadcaster', scopeRequirements: [] },
+      {
+        type: 'stream.online',
+        version: '1',
+        condition: 'broadcaster',
+        scopeRequirements: [],
+        normalizedEventTypes: ['stream-online'],
+      },
+      {
+        type: 'stream.offline',
+        version: '1',
+        condition: 'broadcaster',
+        scopeRequirements: [],
+        normalizedEventTypes: ['stream-offline'],
+      },
     ],
   },
   'hype-train': {
@@ -141,6 +155,18 @@ export const TWITCH_CAPABILITY_REGISTRY: Readonly<Record<TwitchCapabilityId, Twi
       version: '2',
       condition: 'moderator',
       scopeRequirements: [scope('moderator:read:followers')],
+      normalizedEventTypes: ['follow'],
+    }],
+  },
+  rewards: {
+    id: 'rewards',
+    description: 'Observe custom Channel Points reward redemptions.',
+    subscriptions: [{
+      type: 'channel.channel_points_custom_reward_redemption.add',
+      version: '1',
+      condition: 'broadcaster',
+      scopeRequirements: [scope('channel:read:redemptions', 'channel:manage:redemptions')],
+      normalizedEventTypes: ['reward-redemption'],
     }],
   },
   moderation: {
@@ -152,6 +178,7 @@ export const TWITCH_CAPABILITY_REGISTRY: Readonly<Record<TwitchCapabilityId, Twi
         version: '1',
         condition: 'broadcaster',
         scopeRequirements: [scope('channel:moderate')],
+        normalizedEventTypes: ['user-ban', 'user-timeout'],
       },
       {
         type: 'channel.moderate',

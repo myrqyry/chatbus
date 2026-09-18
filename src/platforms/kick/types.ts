@@ -50,6 +50,21 @@ export interface KickGiftedSubscriptionsPayload {
   gifter_username?: string;
 }
 
+export interface KickChannelSubscriptionPayload {
+  id?: string | number;
+  username?: string;
+  user?: { id?: string | number; username?: string; slug?: string };
+  subscriber?: { id?: string | number; username?: string; slug?: string };
+  [key: string]: unknown;
+}
+
+export interface KickLuckyGiftedSubscriptionsPayload {
+  id?: string | number;
+  gifted_usernames?: string[];
+  gifter_username?: string;
+  [key: string]: unknown;
+}
+
 export interface KickStreamHostPayload {
   chatroom_id?: number;
   optional_message?: string;
@@ -92,6 +107,8 @@ export interface KickProtocolDataByType {
   ChatMessage: KickChatMessagePayload;
   Subscription: KickSubscriptionPayload;
   GiftedSubscriptions: KickGiftedSubscriptionsPayload;
+  ChannelSubscription: KickChannelSubscriptionPayload;
+  LuckyGiftedSubscriptions: KickLuckyGiftedSubscriptionsPayload;
   StreamHost: KickStreamHostPayload;
   MessageDeleted: KickMessageDeletedPayload;
   UserBanned: KickUserBannedPayload;
@@ -117,6 +134,8 @@ export interface KickSocketOptions {
   appKey?: string;
   baseUrl?: string;
   inactivityTimeoutMs?: number;
+  channelId?: string;
+  additionalChannels?: string[];
   onOpen?: () => void;
   onMessage?: (message: string) => void;
   onClose?: () => void;
