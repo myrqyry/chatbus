@@ -88,6 +88,25 @@ describe('Twitch capability planning', () => {
     expect(plan.missingScopeRequirements).toEqual([{ anyOf: ['channel:moderate'] }]);
   });
 
+  it('keeps channel.ban on Twitch\'s channel:moderate scope', () => {
+    const ready = planTwitchCapabilities(['moderation'], {
+      broadcasterUserId: 'broadcaster',
+      userId: 'moderator',
+      scopes: ['channel:moderate'],
+    });
+
+    expect(ready.subscriptions.find((subscription) => subscription.type === 'channel.ban'))
+      .toMatchObject({ version: '1', ready: true });
+    expect(twitchSubscriptionMissingScopeRequirements(
+      ['channel.ban'],
+      ['channel:moderate'],
+    )).toEqual([]);
+    expect(twitchSubscriptionMissingScopeRequirements(
+      ['channel.ban'],
+      ['moderator:read:banned_users'],
+    )).toEqual([['channel:moderate']]);
+  });
+
   it('uses current versions for scope-free state capabilities', () => {
     const plan = planTwitchCapabilities(['channel-state', 'stream-state'], {
       broadcasterUserId: 'broadcaster',

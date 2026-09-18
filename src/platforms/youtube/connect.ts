@@ -196,7 +196,7 @@ export async function connectYouTubeChat(options: YouTubeConnectOptions): Promis
         const params = new URLSearchParams({
           part: 'id,snippet,authorDetails',
           liveChatId: liveChat.liveChatId,
-          maxResults: String(Math.min(200, Math.max(1, options.maxResults ?? 200))),
+          maxResults: String(Math.min(2000, Math.max(200, options.maxResults ?? 500))),
           profileImageSize: String(Math.min(720, Math.max(16, options.profileImageSize ?? 88))),
         });
         if (pageToken) params.set('pageToken', pageToken);
@@ -258,6 +258,7 @@ export async function connectYouTubeChat(options: YouTubeConnectOptions): Promis
           }
           break;
         }
+        connected = false;
         options.onStateChange?.('reconnecting');
         const delay = Math.min(1_000 * (2 ** reconnectAttempt++), MAX_RECONNECT_MS);
         try {

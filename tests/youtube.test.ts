@@ -152,6 +152,7 @@ describe('YouTube live chat normalization', () => {
 
 describe('YouTube live chat transport', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -284,6 +285,76 @@ describe('YouTube live chat transport', () => {
       data: expect.objectContaining({ kind: 'chat-ended', reason: 'liveChatEnded' }),
     }));
     connection.close();
+  });
+
+  it('reports connected again after a successful retry', async () => {
+    vi.useFakeTimers();
+    let call = 0;
+    const fetchMock = vi.fn(async () => {
+      call += 1;
+      if (call === 1) {
+        return new Response(JSON.stringify({
+          nextPageToken: 'page-2',
+          pollingIntervalMillis: 100,
+          items: [],
+        }), { status: 200 });
+      }
+      if (call === 2) {
+        return new Response(JSON.stringify({ error: { message: 'temporary failure' } }), { status: 500 });
+      }
+      return new Response(JSON.stringify({
+        nextPageToken: 'page-3',
+        offlineAt: '2026-09-17T20:04:00Z',
+        items: [],
+      }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const states: string[] = [];
+    const connection = await connectYouTubeChat({
+      liveChatId: 'live-chat-1',
+      apiKey: 'key-1',
+      onEvent: () => {},
+      onStateChange: (state) => states.push(state),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(states).toEqual([
+      'connecting',
+      'connected',
+      'reconnecting',
+      'connected',
+      'disconnected',
+    ]);
+    connection.close();
+  });
+
+  it("clamps maxResults to YouTube's 200-2000 range without shrinking valid values", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      return new Response(JSON.stringify({
+        nextPageToken: 'done',
+        offlineAt: '2026-09-17T20:05:00Z',
+        items: [],
+      }), { status: 200 });
+    }));
+
+    for (const [index, maxResults] of [100, 500, 5000].entries()) {
+      const connection = await connectYouTubeChat({
+        liveChatId: `chat-${index}`,
+        apiKey: 'key-1',
+        maxResults,
+        onEvent: () => {},
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      connection.close();
+    }
+
+    expect(urls.map((url) => new URL(url).searchParams.get('maxResults'))).toEqual(['200', '500', '2000']);
   });
 
   it('can skip initial history while retaining the continuation token', async () => {

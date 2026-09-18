@@ -57,6 +57,7 @@ const targetFor = (spec: ChatBusConnectionSpec): string => {
 
 export function createChatBus(options: ChatBusOptions): ChatBus {
   const handles = new Map<string, ChatBusConnectionHandle>();
+  const pending = new Set<string>();
   const state = new Map<string, ChatBusConnectionState>();
 
   const updateState = (
@@ -76,7 +77,8 @@ export function createChatBus(options: ChatBusOptions): ChatBus {
     const target = targetFor(spec);
     if (!target) throw new Error(`${spec.platform} connection target must not be empty`);
     const id = spec.id?.trim() || `${spec.platform}:${target.toLowerCase()}`;
-    if (handles.has(id)) throw new Error(`Chatbus connection already exists: ${id}`);
+    if (handles.has(id) || pending.has(id)) throw new Error(`Chatbus connection already exists: ${id}`);
+    pending.add(id);
 
     const context: ChatBusErrorContext = { id, platform: spec.platform, target };
     const onStateChange = (next: ChatConnectionState) => updateState(id, spec.platform, target, next);
@@ -125,8 +127,10 @@ export function createChatBus(options: ChatBusOptions): ChatBus {
         },
       };
       handles.set(id, handle);
+      pending.delete(id);
       return handle;
     } catch (error) {
+      pending.delete(id);
       const resolved = error instanceof Error ? error : new Error(`Failed to connect ${spec.platform}`);
       updateState(id, spec.platform, target, 'error');
       options.onError?.(resolved, context);

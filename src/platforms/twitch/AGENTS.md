@@ -8,6 +8,7 @@ EventSub WebSocket transport (`connectTwitchChat()`), not `tmi.js`. Needs runtim
 - Optional normalized subscriptions include channel metadata updates, stream online/offline, follows, Channel Points reward redemptions, channel bans/timeouts, and Hype Train. Never add them to default chat implicitly.
 - `connection.subscriptions()` / `cheermotes()` / `onSubscriptionStateChange` expose session state; revocations drop from state.
 - Cheermote enrichment from Helix needs no extra scope/secret; may load in background or via injected `cheermotes`/`getCheermotes`.
+- `channel.ban` EventSub v1 specifically requires `channel:moderate`; do not replace it with the `moderator:read:banned_users` scope used by the separate `channel.moderate` capability.
 
 ## Capabilities (`planTwitchCapabilities()`)
 
