@@ -356,7 +356,7 @@ describe('Twitch EventSub socket lifecycle', () => {
     ws.emitMessage(duplicate);
 
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ id: 'same-message', platform: 'twitch' });
+    expect(events[0]).toMatchObject({ id: 'same-message', platform: 'twitch', origin: 'live' });
 
     connection.close();
   });

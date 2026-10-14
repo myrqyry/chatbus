@@ -1,3 +1,6 @@
+export { toSocialSignal } from './social/signal';
+export type { SocialSignalV1, SocialSignalOptions } from './social/signal';
+
 export type {
   Emote,
   EmoteAssetOptions,

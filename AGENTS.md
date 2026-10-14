@@ -15,6 +15,20 @@ pnpm test        # vitest run
 
 Order: `typecheck` → `test`. CI (`verify.yml`): Node 24, `pnpm install --no-frozen-lockfile` (no lockfile committed), then same two commands. No lint/format/build scripts.
 
+## Social evidence boundary
+
+- `src/social/signal.ts` exports the versioned, JSON-safe
+  `toSocialSignal(ChatEvent)` projection for optional consumers including
+  Veyax Senax. Keep raw `ChatEvent` intact for Sketchy/Noita.
+- Do not add platform transports, sentiment/intent classification,
+  model calls, behavioral decisions, or cross-account identity merging to
+  the social evidence projection. It retains upstream IDs, timestamps,
+  message thread references and explicitly known measurements only.
+- Mark `origin: 'live'` at authenticated source-transport boundaries;
+  pure parsers/replay fixtures should never invent that classification.
+- Before changing wire fields, run both Chatbus unit tests and Veyax's
+  `apps/api/test_sena_social.py`/WebSocket contract suite.
+
 ## Consumption gotcha
 
 Noita/Sketchy overlays pin Git commits of this repo. Advance their pins deliberately only after a verified change lands here.

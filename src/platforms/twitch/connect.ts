@@ -104,7 +104,9 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
     };
     const event = normalizeTwitchEventSubNotification(envelope, context)
       ?? normalizeTwitchHypeTrainEvent(envelope, context);
-    if (event) options.onEvent(event);
+    // This connector receives from authenticated live EventSub. Pure
+    // normalizers remain replay-safe and do not invent live provenance.
+    if (event) options.onEvent({ ...event, origin: 'live' });
   };
 
   const handleRevocation = (envelope: TwitchEventSubEnvelope) => {
@@ -128,6 +130,7 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
       channelId: channel.id,
       channelName: channel.login,
       timestamp: Date.now(),
+      origin: 'live',
       data: {
         kind: 'eventsub-revocation',
         subscriptionId: subscription?.id,

@@ -476,6 +476,14 @@ retain a non-empty last-known-good set when a refresh reports `complete: false`.
 For the complete precedence table, override exceptions, and renderer-facing asset
 selection rules, see [Emote precedence and asset resolution](docs/emote-precedence-and-assets.md).
 
+## Cross-runtime social evidence
+
+Use `toSocialSignal(event)` for an optional versioned, JSON-only projection of
+normalized chat events into social-sense consumers such as Veyax's Senax.
+Chatbus never infers meaning or triggers application behavior. The original
+`ChatEvent` API for Sketchy Chat and Noita Chat is unchanged.
+See [Social signal contract](docs/social-signals.md).
+
 ## Optional Streamlabs socket feed
 
 For Streamlabs donation/follow/subscription alerts and separate alert-system events,
