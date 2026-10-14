@@ -476,6 +476,15 @@ retain a non-empty last-known-good set when a refresh reports `complete: false`.
 For the complete precedence table, override exceptions, and renderer-facing asset
 selection rules, see [Emote precedence and asset resolution](docs/emote-precedence-and-assets.md).
 
+## Optional Streamlabs socket feed
+
+For Streamlabs donation/follow/subscription alerts and separate alert-system events,
+use the opt-in `@myrqyry/chatbus/streamlabs` subpath. It uses the host's native
+WebSocket API with a narrow read-only Engine.IO v3 / Socket.IO v2 protocol
+adapter, without a legacy Socket.IO package dependency. See
+[Streamlabs adapter](docs/streamlabs-adapter.md) for setup, provenance,
+validation scope, and duplicate-event limitations.
+
 ## Development
 
 Run these commands from the repository root:
