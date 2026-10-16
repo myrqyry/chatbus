@@ -201,7 +201,7 @@ export interface TwitchEventSubSocketHandle {
 }
 
 export interface TwitchSubscriptionStateChange {
-  reason: 'subscribed' | 'revoked';
+  reason: 'subscribed' | 'revoked' | 'degraded' | 'repaired';
   subscriptions: TwitchEventSubSubscription[];
   subscription?: TwitchEventSubSubscription;
 }
@@ -213,6 +213,8 @@ export interface TwitchConnectOptions {
   userId?: string;
   broadcasterUserId?: string;
   subscriptions?: TwitchEventSubSubscriptionType[];
+  /** Authoritative Twitch EventSub session audit cadence; 0 disables; default five minutes. */
+  subscriptionReconcileIntervalMs?: number;
   emotes?: EmoteSet;
   getEmotes?: () => EmoteSet;
   getUserEmotes?: (platformUserId: string) => EmoteSet;

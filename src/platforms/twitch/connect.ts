@@ -3,9 +3,11 @@ import { resolveTwitchChannel, resolveTwitchEventSubAuth } from './auth';
 import { fetchTwitchCheermotes } from './cheermotes';
 import { normalizeTwitchHypeTrainEvent } from './hypeTrain';
 import { normalizeTwitchEventSubNotification } from './normalize';
+import { listEnabledTwitchEventSubSubscriptions } from './reconcile';
 import { createTwitchEventSubSocket } from './socket';
 import {
   DEFAULT_TWITCH_CHAT_SUBSCRIPTIONS,
+  createTwitchEventSubSubscription,
   subscribeTwitchChat,
   twitchSubscriptionMissingScopeRequirements,
 } from './subscriptions';
@@ -14,6 +16,7 @@ import type {
   TwitchConnectOptions,
   TwitchEventSubEnvelope,
   TwitchEventSubSubscription,
+  TwitchSubscriptionStateChange,
 } from './types';
 
 const DEDUPE_TTL_MS = 10 * 60 * 1000;
@@ -73,7 +76,7 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
   const currentSubscriptions = (): TwitchEventSubSubscription[] => [...subscriptionState.values()];
   const currentCheermotes = () => options.getCheermotes?.() ?? loadedCheermotes;
   const reportSubscriptionState = (
-    reason: 'subscribed' | 'revoked',
+    reason: TwitchSubscriptionStateChange['reason'],
     subscription?: TwitchEventSubSubscription,
   ) => {
     options.onSubscriptionStateChange?.({
@@ -81,6 +84,108 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
       subscriptions: currentSubscriptions(),
       ...(subscription ? { subscription } : {}),
     });
+  };
+
+
+  const auditIntervalMs = options.subscriptionReconcileIntervalMs ?? 5 * 60_000;
+  if (!Number.isFinite(auditIntervalMs) || auditIntervalMs < 0 ||
+      (auditIntervalMs > 0 && auditIntervalMs < 1_000)) {
+    throw new RangeError('Twitch subscription reconciliation interval must be 0 or at least 1000ms');
+  }
+  const requestedTypes = [...new Set(requestedSubscriptions)];
+  const requestController = new AbortController();
+  const onAbortRequest = () => requestController.abort();
+  options.signal?.addEventListener('abort', onAbortRequest, { once: true });
+  let stopped = false;
+  let sessionId: string | undefined;
+  let socketConnected = false;
+  let auditTimer: ReturnType<typeof setInterval> | undefined;
+  let auditing = false;
+
+  const replaceTracked = (type: string, entry?: TwitchEventSubSubscription): boolean => {
+    const existing = currentSubscriptions().find((record) => record.type === type);
+    if (existing && (!entry || existing.id !== entry.id)) {
+      for (const [key, value] of subscriptionState) {
+        if (value.type === type) subscriptionState.delete(key);
+      }
+    }
+    if (entry && (!existing || existing.id !== entry.id)) {
+      subscriptionState.set(subscriptionKey(entry), entry);
+      return true;
+    }
+    return Boolean(existing && !entry);
+  };
+
+  const reconcile = async () => {
+    if (stopped || auditing || !socketConnected || !sessionId) return;
+    auditing = true;
+    const auditedSession = sessionId;
+    const isCurrent = () => !stopped && socketConnected && sessionId === auditedSession &&
+      !requestController.signal.aborted;
+    try {
+      const all = await listEnabledTwitchEventSubSubscriptions(auth, requestController.signal);
+      if (!isCurrent()) return;
+      // The Twitch GET endpoint lists all enabled subscriptions for the token,
+      // not just the current WebSocket. Never use another session as proof.
+      const active = all.filter((record) =>
+        record.status === 'enabled' &&
+        record.transport?.session_id === auditedSession &&
+        record.condition?.broadcaster_user_id === channel.id);
+      const missing = requestedTypes.filter((type) => !active.some((record) => record.type === type));
+      let changed = false;
+      for (const type of requestedTypes) {
+        const actual = active.find((record) => record.type === type);
+        changed = replaceTracked(type, actual) || changed;
+      }
+      if (missing.length > 0) {
+        reportSubscriptionState('degraded');
+      } else if (changed) {
+        reportSubscriptionState('repaired');
+      }
+
+      let repaired = false;
+      for (const type of missing) {
+        if (!isCurrent()) return;
+        try {
+          const created = await createTwitchEventSubSubscription(
+            type, auditedSession, channel.id, auth, requestController.signal,
+          );
+          if (!isCurrent()) return;
+          if (!created || created.type !== type || (created.status && created.status !== 'enabled')) {
+            throw new Error(`Twitch EventSub repair did not confirm an enabled ${type} subscription`);
+          }
+          replaceTracked(type, created);
+          repaired = true;
+        } catch (error) {
+          if (!isCurrent()) return;
+          options.onError?.(error instanceof Error ? error : new Error('Twitch EventSub repair failed'));
+        }
+      }
+      if (repaired && isCurrent()) reportSubscriptionState('repaired');
+    } catch (error) {
+      if (isCurrent()) {
+        options.onError?.(error instanceof Error ? error : new Error('Twitch subscription inspection failed'));
+      }
+    } finally {
+      auditing = false;
+    }
+  };
+
+  const startAudit = () => {
+    if (auditIntervalMs > 0 && auditTimer === undefined && !stopped) {
+      auditTimer = setInterval(() => { void reconcile(); }, auditIntervalMs);
+    }
+  };
+
+  const stopAudit = () => {
+    stopped = true;
+    socketConnected = false;
+    requestController.abort();
+    options.signal?.removeEventListener('abort', onAbortRequest);
+    if (auditTimer !== undefined) {
+      clearInterval(auditTimer);
+      auditTimer = undefined;
+    }
   };
 
   if (!options.cheermotes && !options.getCheermotes && options.loadCheermotes !== false) {
@@ -152,25 +257,40 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
 
   const socket = createTwitchEventSubSocket({
     ...options.socket,
-    onStateChange: options.onStateChange,
+    onStateChange: (state) => {
+      socketConnected = state === 'connected';
+      options.onStateChange?.(state);
+    },
     onError: options.onError,
     onNotification: handleNotification,
     onRevocation: handleRevocation,
     onWelcome: async (session, { isServerReconnect }) => {
+      sessionId = session.id;
       if (isServerReconnect) return;
       subscriptionState.clear();
       const subscriptions = await subscribeTwitchChat(session.id, channel.id, auth, {
         subscriptions: requestedSubscriptions,
-        signal: options.signal,
+        signal: requestController.signal,
       });
+      if (stopped || requestController.signal.aborted) return;
+      // A WebSocket with zero active subscriptions is not a healthy chat
+      // connection; Twitch will close it shortly after welcome. Reconnect
+      // instead of telling consumers it is fully subscribed.
+      if (subscriptions.length === 0) {
+        throw new Error('Twitch EventSub welcome created no active subscriptions');
+      }
       for (const subscription of subscriptions) {
         subscriptionState.set(subscriptionKey(subscription), subscription);
       }
       reportSubscriptionState('subscribed');
+      startAudit();
     },
   });
 
-  const abort = () => socket.close();
+  const abort = () => {
+    stopAudit();
+    socket.close();
+  };
   options.signal?.addEventListener('abort', abort, { once: true });
 
   return {
@@ -180,6 +300,7 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
     cheermotes: currentCheermotes,
     close: () => {
       options.signal?.removeEventListener('abort', abort);
+      stopAudit();
       socket.close();
     },
   };
