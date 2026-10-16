@@ -11,6 +11,14 @@ import { readCachedEmotes, writeCachedEmotes } from './cache';
 
 const inflight = new Map<string, Promise<EmoteFetchResult>>();
 
+const trackRequest = (channel: string, request: Promise<EmoteFetchResult>): Promise<EmoteFetchResult> => {
+  inflight.set(channel, request);
+  request.finally(() => {
+    if (inflight.get(channel) === request) inflight.delete(channel);
+  }).catch(() => undefined);
+  return request;
+};
+
 const abortable = <T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> => {
   if (!signal) return promise;
   if (signal.aborted) return Promise.reject(new DOMException('The operation was aborted.', 'AbortError'));
@@ -80,17 +88,26 @@ export const fetchChannelEmotesDetailed = async (
 
   if (!options.bypassCache) {
     const cached = readCachedEmotes(channel);
-    if (cached) return abortable(Promise.resolve(cached), options.signal);
+    const missingCandidates = cached !== null &&
+      cached.candidates === undefined && Object.keys(cached.emotes).length > 0;
+    if (cached && !missingCandidates) return abortable(Promise.resolve(cached), options.signal);
+
     const current = inflight.get(channel);
     if (current) return abortable(current, options.signal);
+
+    if (cached && missingCandidates) {
+      // Older cache snapshots retained the winning emotes but not their scopes.
+      // Refresh once for shared consumers; only replace the usable old snapshot
+      // when ALL providers succeed and candidate metadata belongs to that snapshot.
+      const recovery = load(channel).then(
+        (fresh) => fresh.complete && fresh.candidates !== undefined ? fresh : cached,
+        () => cached,
+      );
+      return abortable(trackRequest(channel, recovery), options.signal);
+    }
   }
 
-  const request = load(channel);
-  inflight.set(channel, request);
-  request.finally(() => {
-    if (inflight.get(channel) === request) inflight.delete(channel);
-  }).catch(() => undefined);
-  return abortable(request, options.signal);
+  return abortable(trackRequest(channel, load(channel)), options.signal);
 };
 
 export const fetchChannelEmotes = async (

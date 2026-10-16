@@ -70,6 +70,8 @@ Unknown animation/theme metadata ranks between an exact match and an explicit mi
 
 Applications still own image loading, retry timing, decoding policy, caching, and visual layout. `Chatbus` only provides deterministic candidate order and metadata.
 
+Chatbus owns its **shared emote-metadata cache**. When an older complete cached emote set has no scoped `candidates` (as in some pre-migration chat-core snapshots), `fetchChannelEmotesDetailed()` attempts a shared fresh load so consumers can safely recompute precedence during 7TV live updates. It accepts the replacement only when all providers succeed and the new candidate metadata accompanies that same snapshot. Failed or incomplete recovery returns the still-usable cached emotes, retaining `fromCache: true` and no invented scopes; later calls may retry. Aborting one consumer does not cancel the shared recovery for other consumers. A deliberate `bypassCache: true` still requests a fresh result directly.
+
 ## Derived URL metadata
 
 When providers only expose URLs, `Chatbus` derives metadata conservatively:

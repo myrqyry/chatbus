@@ -17,3 +17,4 @@ Scoped candidates → merged set. Precedence is lexicographic: scope first (`cus
 
 - Channel key: `trim().toLowerCase()`. Consumer abort rejects only that caller, not shared in-flight request.
 - Missing optional provider account = empty success. Real failures → `complete: false`, returned to caller but NOT cached. Apps keep last-known-good non-empty set on `complete: false`.
+- Legacy complete cache with non-empty emotes but no `candidates` gets a shared metadata recovery attempt. Promote only a matching fully complete refreshed snapshot; on degraded/failed recovery keep the old cached snapshot and allow later retries. Do not invent candidate scopes.
