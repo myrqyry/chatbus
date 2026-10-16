@@ -66,6 +66,7 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
     : await resolveTwitchChannel(channelName, auth, options.signal);
 
   const acceptMessage = createMessageDeduper();
+  const acceptNativeMessage = createMessageDeduper();
   const subscriptionState = new Map<string, TwitchEventSubSubscription>();
   let loadedCheermotes = options.cheermotes ?? options.getCheermotes?.() ?? {};
 
@@ -104,6 +105,12 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
     };
     const event = normalizeTwitchEventSubNotification(envelope, context)
       ?? normalizeTwitchHypeTrainEvent(envelope, context);
+    // Envelope IDs only suppress retries of the same EventSub delivery. A
+    // notice and channel.chat.message can carry different envelope IDs for
+    // the very same native message. Suppress those before notifying consumers.
+    if (event?.message?.id && !acceptNativeMessage(
+      `${event.platform}:${event.channelId ?? channel.id}:${event.message.id}`,
+    )) return;
     // This connector receives from authenticated live EventSub. Pure
     // normalizers remain replay-safe and do not invent live provenance.
     if (event) options.onEvent({ ...event, origin: 'live' });

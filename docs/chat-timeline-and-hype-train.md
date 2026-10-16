@@ -24,7 +24,15 @@ connection.onEvent = (event) => {
 
 Deleted entries remain in `snapshot()` with deletion metadata so applications can animate removals, inspect moderation history, or reproduce bugs. `visibleEvents()` returns the non-deleted feed.
 
-`reduceChatTimeline()` and `reduceChatEvents()` expose the same behavior as pure reducer functions. `restore()` accepts a previous timeline snapshot, sorts it deterministically by timestamp, and reapplies the configured bound.
+`reduceChatTimeline()` is a stateless single-event reducer; `reduceChatEvents()` folds a batch using the stateful timeline so deletions preceding their target are also honored. `restore()` accepts a previous timeline snapshot, sorts it deterministically by timestamp, and reapplies the configured bound.
+
+## Message-bearing Twitch notices and out-of-order deletions
+
+Twitch's `channel.chat.notification` can be the **only** delivery of a viewer message for `watch_streak` or `announcement` (including `shared_chat_` variants). If such a notice contains a valid native message, Chatbus normalizes it as `type: 'message'` so normal chat consumers see the actual text and fragments. Its `data.kind: 'chat-notification'`, `data.noticeType`, and `data.systemMessage` preserve the original notice context for decorative consumers. A notice without an actual message remains `system`. Optional resub texts stay attached to `subscription` events rather than being mistaken for ordinary chat commands.
+
+Two EventSub envelopes can have distinct delivery IDs but the same native `message.id`. The Twitch connector suppresses repeated native messages per channel in addition to deduplicating delivery IDs. The timeline reducer likewise retains only the first matching message ID per platform/channel, even if one delivery came from a notice. Consumers that bypass the connector or timeline must handle replay duplicates themselves.
+
+A moderator's `message-delete` event may precede its target message. `ChatTimeline` remembers at most `2 × limit` channel-scoped unseen deletion events, and applies them if the matching native message arrives later; it never mistakes the deletion's own delivery ID for a target ID. The pending buffer has no persistent backing, and is cleared by `clear()` and `restore()`. The stateless one-event `reduceChatTimeline()` cannot remember an unseen deletion across separate calls; use `ChatTimeline` or `reduceChatEvents()` for this guarantee. Dedupe and pending-state limits are bounded, not guarantees of infinite replay history.
 
 The default limit is 100 entries. No state is written to disk; applications choose whether and where to persist snapshots.
 

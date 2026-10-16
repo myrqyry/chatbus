@@ -259,6 +259,15 @@ const normalizeNotification = (
     type = 'raid';
   }
 
+  const message = notificationMessage(event, envelope, context, user, channelId, channelName, timestamp);
+  // Watch-streak and announcement notices can be the *only* delivery of a
+  // viewer's real chat message. Route them through normal chat consumers while
+  // keeping the native notice context available for overlays that decorate it.
+  const baseNoticeType = noticeType.replace(/^shared_chat_/u, '');
+  if (message && (baseNoticeType === 'watch_streak' || baseNoticeType === 'announcement')) {
+    type = 'message';
+  }
+
   return {
     id: stringValue(event.message_id) ?? envelope.metadata.message_id,
     type,
@@ -267,7 +276,7 @@ const normalizeNotification = (
     channelName,
     timestamp,
     user,
-    message: notificationMessage(event, envelope, context, user, channelId, channelName, timestamp),
+    message,
     data: {
       kind: 'chat-notification',
       noticeType,

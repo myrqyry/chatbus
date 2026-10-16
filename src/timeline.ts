@@ -133,7 +133,8 @@ const applyMutation = (
   reason: ChatTimelineDeletionReason,
 ): ChatTimelineEntry[] => {
   if (reason === 'message-delete') {
-    const messageId = dataString(event, 'messageId') ?? event.id;
+    // event.id can identify the deletion *delivery*, not its target message.
+    const messageId = dataString(event, 'messageId');
     if (!messageId) return [...entries];
     return markDeleted(entries, event, reason, (entry) =>
       sameChannel(entry.event, event) && entry.event.message?.id === messageId);
@@ -184,6 +185,13 @@ export function reduceChatTimeline(
   if (mutation) return trimToLimit(applyMutation(entries, event, mutation), limit);
   if (!isRenderableTimelineEvent(event)) return trimToLimit(entries, limit);
 
+  // One native message can arrive via both a chat notice and the ordinary
+  // message feed. Keep the first delivery, scoped to its actual channel.
+  if (event.message?.id && entries.some((entry) =>
+    entry.event.message?.id === event.message?.id && sameChannel(entry.event, event))) {
+    return trimToLimit(entries, limit);
+  }
+
   return trimToLimit(insertByTimestamp(entries, {
     event,
     deleted: false,
@@ -194,12 +202,9 @@ export function reduceChatEvents(
   events: Iterable<ChatEvent>,
   options: ChatTimelineOptions = {},
 ): ChatTimelineEntry[] {
-  const limit = normalizeLimit(options.limit);
-  let entries: ChatTimelineEntry[] = [];
-  for (const event of events) {
-    entries = reduceChatTimeline(entries, event, { limit });
-  }
-  return entries;
+  const timeline = new ChatTimeline(options);
+  timeline.applyMany(events);
+  return timeline.snapshot();
 }
 
 const matchesSnapshotFilter = (
@@ -219,6 +224,9 @@ const matchesSnapshotFilter = (
 export class ChatTimeline {
   readonly limit: number;
   private entries: ChatTimelineEntry[] = [];
+  // A deletion can precede the message it targets. Bound pending mutations
+  // independently from the renderable timeline; no timers or global state.
+  private pendingMessageDeletes: ChatEvent[] = [];
 
   constructor(options: ChatTimelineOptions = {}) {
     this.limit = normalizeLimit(options.limit);
@@ -228,19 +236,40 @@ export class ChatTimeline {
     return this.entries.length;
   }
 
-  apply(event: ChatEvent): ChatTimelineEntry[] {
+  private ingest(event: ChatEvent): void {
+    if (event.type === 'message-delete' && dataString(event, 'messageId') &&
+      (eventChannelId(event) || eventChannelName(event))) {
+      this.pendingMessageDeletes.push(event);
+      if (this.pendingMessageDeletes.length > this.limit * 2) {
+        this.pendingMessageDeletes.shift();
+      }
+    }
+
     this.entries = reduceChatTimeline(this.entries, event, { limit: this.limit });
+
+    if (event.message?.id && isRenderableTimelineEvent(event)) {
+      const pending = this.pendingMessageDeletes.find((deletion) =>
+        dataString(deletion, 'messageId') === event.message?.id && sameChannel(event, deletion));
+      if (pending) {
+        this.entries = reduceChatTimeline(this.entries, pending, { limit: this.limit });
+      }
+    }
+  }
+
+  apply(event: ChatEvent): ChatTimelineEntry[] {
+    this.ingest(event);
     return this.snapshot({ includeDeleted: true });
   }
 
   applyMany(events: Iterable<ChatEvent>): ChatTimelineEntry[] {
-    for (const event of events) {
-      this.entries = reduceChatTimeline(this.entries, event, { limit: this.limit });
-    }
+    for (const event of events) this.ingest(event);
     return this.snapshot({ includeDeleted: true });
   }
 
   restore(entries: readonly ChatTimelineEntry[]): void {
+    // A snapshot cannot represent unseen deletions; never carry pending
+    // mutations from a previous, unrelated timeline across restore.
+    this.pendingMessageDeletes = [];
     const sorted = entries.map((entry) => ({
       ...entry,
       deletion: entry.deletion ? { ...entry.deletion } : undefined,
@@ -263,5 +292,6 @@ export class ChatTimeline {
 
   clear(): void {
     this.entries = [];
+    this.pendingMessageDeletes = [];
   }
 }

@@ -358,6 +358,39 @@ describe('Twitch EventSub socket lifecycle', () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ id: 'same-message', platform: 'twitch', origin: 'live' });
 
+    const noticeFrame = (nativeId: string) => ({
+      metadata: {
+        message_id: 'delivery-notice-' + nativeId,
+        message_type: 'notification',
+        message_timestamp: '2026-09-12T20:01:00Z',
+        subscription_type: 'channel.chat.notification',
+        subscription_version: '1',
+      },
+      payload: {
+        subscription: { type: 'channel.chat.notification', version: '1' },
+        event: {
+          broadcaster_user_id: '10', broadcaster_user_login: 'streamer',
+          chatter_user_id: '20', chatter_user_login: 'viewer', chatter_user_name: 'Viewer',
+          notice_type: 'watch_streak', message_id: nativeId,
+          message: { text: 'hello Kappa @friend Cheer100' },
+        },
+      },
+    });
+
+    // Normal delivery then notice: the EventSub envelope IDs differ,
+    // but both represent the same native chat message.
+    ws.emitMessage(noticeFrame('same-message'));
+    expect(events).toHaveLength(1);
+
+    // Reverse arrival order must also emit only once.
+    ws.emitMessage(noticeFrame('notice-first'));
+    ws.emitMessage(chatMessage('notice-first'));
+    expect(events).toHaveLength(2);
+    expect(events[1]).toMatchObject({
+      id: 'notice-first', type: 'message', platform: 'twitch',
+      data: { noticeType: 'watch_streak' },
+    });
+
     connection.close();
   });
 });
