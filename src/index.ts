@@ -283,6 +283,8 @@ export {
 export { normalizeTwitchEventSubNotification } from './platforms/twitch/normalize';
 export { parseTwitchEventSubFrame } from './platforms/twitch/protocol';
 export { createTwitchEventSubSocket, twitchReconnectDelay } from './platforms/twitch/socket';
+export { parseTwitchIrcLine, normalizeTwitchIrcFrame, connectTwitchIrcChat } from './platforms/twitch/irc';
+export type { TwitchIrcFrame, TwitchIrcNormalizeContext, TwitchIrcConnectOptions, TwitchIrcConnection } from './platforms/twitch/irc';
 export {
   createTwitchEventSubSubscription,
   DEFAULT_TWITCH_CHAT_SUBSCRIPTIONS,

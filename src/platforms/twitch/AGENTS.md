@@ -1,6 +1,8 @@
 # AGENTS.md — `src/platforms/twitch/`
 
-EventSub WebSocket transport (`connectTwitchChat()`), not `tmi.js`. Needs runtime **user access token** with `user:read:chat`; never commit tokens.
+Primary EventSub WebSocket transport (`connectTwitchChat()`), not `tmi.js`. Needs runtime **user access token** with `user:read:chat`; never commit tokens.
+
+Optional anonymous receive-only `connectTwitchIrcChat()` lives in `irc.ts` and supplies exact IRC framing, tags, channel-scoped moderation and normalized `ChatEvent`. Anonymous `justinfan` login is not a Twitch-documented supported authentication path. Keep EventSub the primary connector. See `docs/twitch-anonymous-irc.md` and `tests/twitchIrc.test.ts`; do not delete overlay TMI paths before parity verification.
 
 ## Subscriptions
 
