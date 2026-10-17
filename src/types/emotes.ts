@@ -64,6 +64,8 @@ export interface Emote {
   ownerName?: string;
   images?: EmoteImage[];
   modifier?: EmoteModifier;
+  /** FFZ modifier_flags: provider-defined bitset, preserved for consumer effects. */
+  modifierFlags?: number;
   content?: EmoteContentMetadata;
   overrides?: EmoteOverrideMetadata;
   raw?: unknown;

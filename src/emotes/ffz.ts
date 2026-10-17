@@ -48,7 +48,7 @@ const candidatesFrom = (data: FfzResponse, scope: 'channel' | 'global'): EmoteCa
       provider: 'ffz' as const,
       scope,
       images,
-      ...(modifier ? { modifier } : {}),
+      ...(modifier ? { modifier, modifierFlags: Number.isSafeInteger(emote.modifier_flags) && (emote.modifier_flags ?? 0) >= 0 ? emote.modifier_flags : 0 } : {}),
       raw: emote,
     }];
   }));

@@ -46,11 +46,15 @@ describe('provider adapters', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ sets: { '1': { emoticons: [
       { id: 7, name: 'Overlay', modifier: true, modifier_flags: 0, urls: { '1': '//cdn.example/7' } },
       { id: 8, name: 'Hidden', modifier: true, modifier_flags: 1, urls: { '1': '//cdn.example/8' } },
+      { id: 9, name: 'Hyper', modifier: true, modifier_flags: 12289, urls: { '1': '//cdn.example/9' } },
     ] } } }), { status: 200 })));
 
     const result = await fetchGlobalFfz();
     expect(result.candidates[0]).toMatchObject({ modifier: 'overlay', zeroWidth: true });
     expect(result.candidates[1]).toMatchObject({ modifier: 'hidden', zeroWidth: false });
+    expect(result.candidates[0]).toMatchObject({ modifierFlags: 0 });
+    expect(result.candidates[1]).toMatchObject({ modifierFlags: 1 });
+    expect(result.candidates[2]).toMatchObject({ modifier: 'hidden', modifierFlags: 12289 });
   });
 
   it('parses global BTTV and FFZ candidates', async () => {
