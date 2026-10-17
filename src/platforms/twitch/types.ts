@@ -19,6 +19,11 @@ export type TwitchStateSubscriptionType =
   | 'stream.online'
   | 'stream.offline';
 
+export type TwitchSharedChatSubscriptionType =
+  | 'channel.shared_chat.begin'
+  | 'channel.shared_chat.update'
+  | 'channel.shared_chat.end';
+
 export type TwitchFollowerSubscriptionType = 'channel.follow';
 export type TwitchRewardSubscriptionType = 'channel.channel_points_custom_reward_redemption.add';
 export type TwitchModerationSubscriptionType = 'channel.ban';
@@ -27,6 +32,7 @@ export type TwitchEventSubSubscriptionType =
   | TwitchChatSubscriptionType
   | TwitchHypeTrainSubscriptionType
   | TwitchStateSubscriptionType
+  | TwitchSharedChatSubscriptionType
   | TwitchFollowerSubscriptionType
   | TwitchRewardSubscriptionType
   | TwitchModerationSubscriptionType;

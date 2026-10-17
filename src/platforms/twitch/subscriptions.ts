@@ -9,6 +9,7 @@ import type {
   TwitchModerationSubscriptionType,
   TwitchRewardSubscriptionType,
   TwitchStateSubscriptionType,
+  TwitchSharedChatSubscriptionType,
 } from './types';
 
 export const DEFAULT_TWITCH_CHAT_SUBSCRIPTIONS: TwitchChatSubscriptionType[] = [
@@ -30,6 +31,12 @@ export const TWITCH_STATE_SUBSCRIPTIONS: TwitchStateSubscriptionType[] = [
   'channel.update',
   'stream.online',
   'stream.offline',
+];
+
+export const TWITCH_SHARED_CHAT_SUBSCRIPTIONS: TwitchSharedChatSubscriptionType[] = [
+  'channel.shared_chat.begin',
+  'channel.shared_chat.update',
+  'channel.shared_chat.end',
 ];
 
 export const TWITCH_FOLLOW_SUBSCRIPTIONS: TwitchFollowerSubscriptionType[] = ['channel.follow'];

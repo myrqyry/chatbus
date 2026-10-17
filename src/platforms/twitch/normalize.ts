@@ -76,24 +76,22 @@ const replyFromMessage = (event: TwitchChatMessagePayload): ChatMessageReply | u
   };
 };
 
-const sourceFromMessage = (event: TwitchChatMessagePayload): ChatMessageSource | undefined => {
-  const hasSource = Boolean(
-    event.source_broadcaster_user_id ||
-    event.source_broadcaster_user_login ||
-    event.source_broadcaster_user_name ||
-    event.source_message_id ||
-    event.source_badges?.length ||
-    typeof event.is_source_only === 'boolean',
-  );
-  if (!hasSource) return undefined;
-  const badgeRefs = badgeRefsFrom(event.source_badges ?? undefined);
+const sourceFromMessage = (
+  event: Record<string, unknown> | TwitchChatMessagePayload,
+): ChatMessageSource | undefined => {
+  const channelId = stringValue(event.source_broadcaster_user_id);
+  const channelName = stringValue(event.source_broadcaster_user_login);
+  const displayName = stringValue(event.source_broadcaster_user_name);
+  const messageId = stringValue(event.source_message_id);
+  const badges = badgeRowsFromUnknown(event.source_badges);
+  const sourceOnly = typeof event.is_source_only === 'boolean' ? event.is_source_only : undefined;
+  if (!channelId && !channelName && !displayName && !messageId && !badges.length &&
+      sourceOnly === undefined) return undefined;
+  const badgeRefs = badgeRefsFrom(badges);
   return {
-    channelId: event.source_broadcaster_user_id ?? undefined,
-    channelName: event.source_broadcaster_user_login ?? undefined,
-    displayName: event.source_broadcaster_user_name ?? undefined,
-    messageId: event.source_message_id ?? undefined,
-    badgeRefs: badgeRefs.length ? badgeRefs : undefined,
-    sourceOnly: event.is_source_only ?? undefined,
+    channelId, channelName, displayName, messageId,
+    ...(badgeRefs.length ? { badgeRefs } : {}),
+    ...(sourceOnly !== undefined ? { sourceOnly } : {}),
   };
 };
 
@@ -204,6 +202,7 @@ const notificationMessage = (
     text: parsed.text,
     fragments: parsed.fragments,
     timestamp,
+    source: sourceFromMessage(event),
     traits: { emoteOnly: isTwitchMessageEmoteOnly(parsed.fragments) },
     raw: event,
   };
@@ -379,6 +378,51 @@ export function normalizeTwitchEventSubNotification(
 
   if (subscriptionType === 'channel.chat.notification') {
     return normalizeNotification(event, envelope, context);
+  }
+
+  if (
+    subscriptionType === 'channel.shared_chat.begin' ||
+    subscriptionType === 'channel.shared_chat.update' ||
+    subscriptionType === 'channel.shared_chat.end'
+  ) {
+    const phase = subscriptionType.slice('channel.shared_chat.'.length) as 'begin' | 'update' | 'end';
+    const sessionId = stringValue(event.session_id);
+    const hostId = stringValue(event.host_broadcaster_user_id);
+    if (!sessionId || !channelId || !hostId) return null;
+
+    const participants = Array.isArray(event.participants)
+      ? event.participants.flatMap((value) => {
+        const participant = asRecord(value);
+        const id = participant && stringValue(participant.broadcaster_user_id);
+        if (!participant || !id) return [];
+        return [{
+          id,
+          login: stringValue(participant.broadcaster_user_login),
+          displayName: stringValue(participant.broadcaster_user_name),
+        }];
+      })
+      : undefined;
+
+    return {
+      id: envelope.metadata.message_id,
+      type: 'room-state',
+      platform: 'twitch',
+      channelId,
+      channelName,
+      timestamp,
+      data: {
+        kind: 'shared-chat-session',
+        phase,
+        sessionId,
+        host: {
+          id: hostId,
+          login: stringValue(event.host_broadcaster_user_login),
+          displayName: stringValue(event.host_broadcaster_user_name),
+        },
+        ...(phase !== 'end' && participants ? { participants } : {}),
+      },
+      raw: envelope,
+    };
   }
 
   if (subscriptionType === 'channel.update') {

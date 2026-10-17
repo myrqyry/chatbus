@@ -31,6 +31,40 @@ The planner is descriptive. A subscription being `ready` means the supplied toke
 
 The registry intentionally does not broaden the default `connectTwitchChat()` subscription set. Normal chat keeps its small `user:read:chat` contract; optional requested subscriptions add only their documented scope requirements. `connectTwitchChat()` remains a chat-oriented authenticated connector, so token validation still requires `user:read:chat` even when an application requests additional state events.
 
+## Native Twitch Shared Chat social context
+
+Chatbus preserves `message.source` not just on `channel.chat.message`, but also on `channel.chat.notification`. Shared Chat subscription notices, announcements, and raids can carry `source_broadcaster_user_id`, `source_message_id`, `source_badges`, and `is_source_only`. The normalized message keeps the receiving channel in `message.channelId`, while `message.source` retains the original channel and original message identifier when Twitch supplies them. Absent source fields are never fabricated.
+
+Twitch also offers **native**, scope-free `channel.shared_chat.begin`, `update`, and `end` events. They are opt-in, not part of normal chat subscriptions:
+
+```ts
+import {
+  connectTwitchChat,
+  DEFAULT_TWITCH_CHAT_SUBSCRIPTIONS,
+  TWITCH_SHARED_CHAT_SUBSCRIPTIONS,
+} from '@myrqyry/chatbus';
+
+const connection = await connectTwitchChat({
+  channel: 'example',
+  accessToken,
+  subscriptions: [
+    ...DEFAULT_TWITCH_CHAT_SUBSCRIPTIONS,
+    ...TWITCH_SHARED_CHAT_SUBSCRIPTIONS,
+  ],
+  onEvent(event) {
+    if (event.type === 'room-state' &&
+        (event.data as { kind?: string } | undefined)?.kind === 'shared-chat-session') {
+      // event.data: { kind, phase, sessionId, host, participants? }
+      // phase: 'begin' | 'update' | 'end'; end omits participants.
+    }
+  },
+});
+```
+
+These events are normalized with `type: 'room-state'`, `data.kind: 'shared-chat-session'`, the server-supplied session identifier, host identity, and participants for begin/update when supplied. They are **social presence state**, not a new automation system. The normal chat scope `user:read:chat` is still required by this connector's authentication flow, even though the three additional EventSub subscriptions require no scopes.
+
+Sources: [Twitch EventSub subscription types](https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types#channelsharedchatbegin), [Twitch EventSub event fields](https://dev.twitch.tv/docs/eventsub/eventsub-reference#channel-shared-chat-session-begin-event).
+
 ## Test and replay events
 
 The event helpers make overlay failures reproducible without requiring a live Twitch/Kick session.

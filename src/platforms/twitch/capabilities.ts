@@ -1,9 +1,11 @@
 import type { ChatEventType } from '../../types/chat';
+import { TWITCH_SHARED_CHAT_SUBSCRIPTIONS } from './subscriptions';
 
 export type TwitchCapabilityId =
   | 'chat'
   | 'channel-state'
   | 'stream-state'
+  | 'shared-chat'
   | 'hype-train'
   | 'followers'
   | 'rewards'
@@ -137,6 +139,17 @@ export const TWITCH_CAPABILITY_REGISTRY: Readonly<Record<TwitchCapabilityId, Twi
         normalizedEventTypes: ['stream-offline'],
       },
     ],
+  },
+  'shared-chat': {
+    id: 'shared-chat',
+    description: 'Observe native Twitch shared chat session membership and host changes.',
+    subscriptions: TWITCH_SHARED_CHAT_SUBSCRIPTIONS.map((type) => ({
+      type,
+      version: '1',
+      condition: 'broadcaster' as const,
+      scopeRequirements: [],
+      normalizedEventTypes: ['room-state'] as const,
+    })),
   },
   'hype-train': {
     id: 'hype-train',
