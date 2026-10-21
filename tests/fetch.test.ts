@@ -28,6 +28,17 @@ describe('fetchWithTimeout', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('does not start a request when the caller signal is already aborted', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchWithTimeout('https://example.com/data', { signal: controller.signal }, 100, 3))
+      .rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('does not retry an immediate zero-timeout abort', async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn((_url: string, options?: RequestInit) => new Promise<Response>((_resolve, reject) => {

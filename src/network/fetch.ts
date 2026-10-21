@@ -35,6 +35,10 @@ export async function fetchWithTimeout(
   timeoutMs = DEFAULT_TIMEOUT_MS,
   retries = DEFAULT_RETRIES,
 ): Promise<Response> {
+  if (options.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError');
+  }
+
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
