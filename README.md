@@ -513,3 +513,5 @@ surface, processed-asset caching, additional platform adapters, a separate
 shared connection/relay companion, desktop OAuth/account lifecycle helpers, and
 platform-specific write/send/reply APIs without forcing privileged concerns into
 read-only overlay consumers.
+
+**7TV name-paint wire contract:** see [docs/seventv-name-paints.md](docs/seventv-name-paints.md) for the currently consumed v3 cosmetics schema, signed ARGB values, legacy gradients, and the unimplemented separate v4 layered paint contract.
