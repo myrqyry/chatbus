@@ -22,11 +22,30 @@ gradients arrays were empty. The "Candy Cane" paint ID
 `repeat: true` and separate shadows. Unit-test fixtures preserve these
 observed shapes; CI does not require live API availability.
 
-7TV also publishes a **newer v4 layer-based paint schema**, with
-`PaintData.layers` and `PaintLayerType` variants. That is a **different
-contract**, not silently equivalent to the v3 fields. Chatbus does not yet
-fetch or map v4 layered paints. A future v4 ingestion path will require a
-separate verified endpoint, user-identity mapping, and contract tests.
+## Independently versioned v4 paint adapter
+
+Chatbus now also exposes fetchSevenTvPaintV4Detailed(twitchUserId, options),
+backed by POST https://7tv.io/v4/gql. The v4 GraphQL query resolves the
+Twitch-linked user, active selected paint and matching inventory paint.
+
+Its PaintData.layers normalize into NamePaint.layers with typed variants:
+solid (ARGB color), linear (angle/repeat/stops), radial (shape/repeat/stops),
+and image (HTTPS URL). Each layer retains its own opacity and array order.
+V4 RGBA hex colors are converted to numeric ARGB. No remote CSS is accepted.
+
+V3 and v4 are distinct API adapters, not two consumer implementations.
+V3 retains legacy function/stops metadata; v4 retains ordered layers.
+Both share a renderer-neutral NamePaint contract.
+
+Successful no-paint responses are cached for five minutes, while HTTP
+failures, GraphQL errors and missing active inventory paint are reported
+as failures and not negative-cached. Concurrent lookups coalesce.
+Use clearSevenTvPaintV4Cache on cosmetic invalidation.
+
+The current v4 GraphQL query was accepted by the live endpoint on
+October 23, 2026. Its sampled public identity had no paint; layered fixtures
+are validated in deterministic tests, not claimed as an observed live
+painted-user response.
 
 Sources: 7TV's v3 API Swagger (`SevenTV/API` archive), 7TV Extension
 `useCosmetics.ts` / `createGradientFromPaint`, and the newer

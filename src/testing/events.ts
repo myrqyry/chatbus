@@ -270,6 +270,20 @@ const isNamePaintText = (value: unknown): boolean => {
     (text.shadows === undefined || (Array.isArray(text.shadows) && text.shadows.every(isNamePaintShadow)));
 };
 
+const isNamePaintLayer = (value: unknown): boolean => {
+  const layer = asRecord(value);
+  if (!layer || !isFiniteNumber(layer.opacity) || layer.opacity < 0 || layer.opacity > 1) return false;
+  if (layer.kind === 'solid') return isFiniteNumber(layer.color);
+  if (layer.kind === 'image') return typeof layer.url === 'string';
+  if (layer.kind === 'linear' || layer.kind === 'radial') {
+    return Array.isArray(layer.stops) && layer.stops.every(isNamePaintStop) &&
+      typeof layer.repeating === 'boolean' &&
+      (layer.kind === 'linear' ? isFiniteNumber(layer.angle) :
+        layer.shape === 'circle' || layer.shape === 'ellipse');
+  }
+  return false;
+};
+
 const isNamePaint = (value: unknown): boolean => {
   const paint = asRecord(value);
   return Boolean(
@@ -279,6 +293,7 @@ const isNamePaint = (value: unknown): boolean => {
     isOptionalString(paint.name) &&
     isOptionalFiniteNumber(paint.color) &&
     (paint.text === undefined || isNamePaintText(paint.text)) &&
+    (paint.layers === undefined || (Array.isArray(paint.layers) && paint.layers.every(isNamePaintLayer))) &&
     (paint.gradients === undefined || (
       Array.isArray(paint.gradients) && paint.gradients.every(isNamePaintGradient)
     )) &&

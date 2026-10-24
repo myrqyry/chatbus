@@ -28,6 +28,7 @@ export type {
   IdentityFetchOptions,
   NamePaint,
   NamePaintGradient,
+  NamePaintLayer,
   NamePaintShadow,
   NamePaintStop,
   NamePaintText,
@@ -94,6 +95,7 @@ export {
   fetchSevenTvUserCosmeticsDetailed,
   SEVEN_TV_COSMETICS_CACHE_MS,
 } from './identity/sevenTv';
+export { clearSevenTvPaintV4Cache, fetchSevenTvPaintV4Detailed } from './identity/sevenTvV4';
 export { fetchJson, fetchWithTimeout, isAbortError } from './network/fetch';
 export { resolveTwitchUserId } from './emotes/twitch';
 export {

@@ -70,12 +70,20 @@ export interface NamePaintText {
   shadows?: NamePaintShadow[];
 }
 
+/** V4 paint layers remain ordered bottom-to-top, with independent opacity. */
+export type NamePaintLayer =
+  | { kind: 'solid'; color: number; opacity: number }
+  | { kind: 'linear'; angle: number; repeating: boolean; stops: NamePaintStop[]; opacity: number }
+  | { kind: 'radial'; shape: 'circle' | 'ellipse'; repeating: boolean; stops: NamePaintStop[]; opacity: number }
+  | { kind: 'image'; url: string; opacity: number };
+
 export interface NamePaint {
   id: string;
   provider: '7tv' | 'custom';
   name?: string;
   color?: number;
   gradients?: NamePaintGradient[];
+  layers?: NamePaintLayer[];
   shadows?: NamePaintShadow[];
   text?: NamePaintText;
   function?: string;
