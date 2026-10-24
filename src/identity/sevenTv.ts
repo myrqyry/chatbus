@@ -8,6 +8,7 @@ import type {
   NamePaintGradient,
   NamePaintShadow,
   NamePaintStop,
+  NamePaintText,
   UserCosmetics,
 } from '../types/identity';
 
@@ -66,12 +67,21 @@ interface SevenTvPaintShadow {
   color?: number;
 }
 
+interface SevenTvPaintText {
+  weight?: number;
+  variant?: string;
+  transform?: string;
+  stroke?: { width?: number; color?: number };
+  shadows?: SevenTvPaintShadow[];
+}
+
 interface SevenTvPaint {
   id?: string;
   name?: string;
   color?: number | null;
   gradients?: SevenTvPaintGradient[];
   shadows?: SevenTvPaintShadow[];
+  text?: SevenTvPaintText | null;
   function?: string;
   repeat?: boolean;
   angle?: number;
@@ -106,6 +116,7 @@ const COSMETICS_QUERY = `query ChatbusCosmetics($list: [ObjectID!]) {
       id name color function repeat angle shape image_url
       stops { at color center_at }
       shadows { x_offset y_offset radius color }
+      text { weight variant transform stroke { width color } shadows { x_offset y_offset radius color } }
       gradients {
         function canvas_repeat canvas_size at image_url shape angle repeat
         stops { at color center_at }
@@ -158,6 +169,19 @@ const mapShadow = (shadow: SevenTvPaintShadow): NamePaintShadow | null =>
     ? { xOffset: shadow.x_offset, yOffset: shadow.y_offset, radius: shadow.radius, color: shadow.color }
     : null;
 
+const mapText = (text: SevenTvPaintText | null | undefined): NamePaintText | undefined => {
+  if (!text) return undefined;
+  const stroke = text.stroke;
+  return {
+    ...(Number.isFinite(text.weight) ? { weight: text.weight } : {}),
+    ...(typeof text.variant === 'string' ? { variant: text.variant } : {}),
+    ...(typeof text.transform === 'string' ? { transform: text.transform } : {}),
+    ...(stroke && Number.isFinite(stroke.width) && Number.isFinite(stroke.color)
+      ? { stroke: { width: stroke.width!, color: stroke.color! } } : {}),
+    shadows: (text.shadows ?? []).map(mapShadow).filter((shadow): shadow is NamePaintShadow => shadow !== null),
+  };
+};
+
 const mapPaint = (paint: SevenTvPaint | undefined): NamePaint | undefined => {
   if (!paint?.id) return undefined;
   return {
@@ -167,6 +191,7 @@ const mapPaint = (paint: SevenTvPaint | undefined): NamePaint | undefined => {
     color: paint.color ?? undefined,
     gradients: (paint.gradients ?? []).map(mapGradient),
     shadows: (paint.shadows ?? []).map(mapShadow).filter((shadow): shadow is NamePaintShadow => shadow !== null),
+    ...(paint.text ? { text: mapText(paint.text) } : {}),
     function: paint.function,
     repeat: paint.repeat,
     angle: paint.angle,

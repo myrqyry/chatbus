@@ -30,6 +30,7 @@ export type {
   NamePaintGradient,
   NamePaintShadow,
   NamePaintStop,
+  NamePaintText,
   UserCosmetics,
 } from './types/identity';
 export type {

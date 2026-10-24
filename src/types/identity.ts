@@ -62,6 +62,14 @@ export interface NamePaintShadow {
   color: number;
 }
 
+export interface NamePaintText {
+  weight?: number;
+  variant?: string;
+  transform?: string;
+  stroke?: { width: number; color: number };
+  shadows?: NamePaintShadow[];
+}
+
 export interface NamePaint {
   id: string;
   provider: '7tv' | 'custom';
@@ -69,6 +77,7 @@ export interface NamePaint {
   color?: number;
   gradients?: NamePaintGradient[];
   shadows?: NamePaintShadow[];
+  text?: NamePaintText;
   function?: string;
   repeat?: boolean;
   angle?: number;

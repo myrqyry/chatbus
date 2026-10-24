@@ -258,6 +258,18 @@ const isNamePaintShadow = (value: unknown): boolean => {
   );
 };
 
+const isNamePaintText = (value: unknown): boolean => {
+  const text = asRecord(value);
+  if (!text) return false;
+  const stroke = text.stroke === undefined ? null : asRecord(text.stroke);
+  return isOptionalFiniteNumber(text.weight) &&
+    isOptionalString(text.variant) &&
+    isOptionalString(text.transform) &&
+    (text.stroke === undefined || Boolean(stroke &&
+      isFiniteNumber(stroke.width) && isFiniteNumber(stroke.color))) &&
+    (text.shadows === undefined || (Array.isArray(text.shadows) && text.shadows.every(isNamePaintShadow)));
+};
+
 const isNamePaint = (value: unknown): boolean => {
   const paint = asRecord(value);
   return Boolean(
@@ -266,6 +278,7 @@ const isNamePaint = (value: unknown): boolean => {
     (paint.provider === '7tv' || paint.provider === 'custom') &&
     isOptionalString(paint.name) &&
     isOptionalFiniteNumber(paint.color) &&
+    (paint.text === undefined || isNamePaintText(paint.text)) &&
     (paint.gradients === undefined || (
       Array.isArray(paint.gradients) && paint.gradients.every(isNamePaintGradient)
     )) &&

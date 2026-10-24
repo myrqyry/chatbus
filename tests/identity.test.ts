@@ -124,6 +124,37 @@ describe('7TV cosmetics', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it('parses observed v3 legacy paints with signed ARGB, repeat, shadows and text styling', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).includes('/users/twitch/')) {
+        return new Response(JSON.stringify({
+          user: { id: '7user', style: { paint_id: '01FQ8S87J8000BDD0YMN21KEXG' } },
+        }), { status: 200 });
+      }
+      const body = JSON.parse(String(init?.body)) as { query: string; variables: { list: string[] } };
+      expect(body.query).toContain('text {');
+      expect(body.variables.list).toEqual(['01FQ8S87J8000BDD0YMN21KEXG']);
+      return new Response(JSON.stringify({ data: { cosmetics: { paints: [{
+        id: '01FQ8S87J8000BDD0YMN21KEXG', name: 'Candy Cane',
+        function: 'LINEAR_GRADIENT', angle: 45, repeat: true, gradients: [],
+        stops: [{ at: 0.1, color: -757935361 }, { at: 0.2, color: -10197761 }],
+        shadows: [{ x_offset: -1, y_offset: 0, radius: 0.7, color: 102 }],
+        text: { weight: 6, transform: 'uppercase', stroke: { width: 2, color: -757935361 },
+          shadows: [{ x_offset: 1, y_offset: 2, radius: 3, color: -10197761 }] },
+      }], badges: [] } } }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await fetchSevenTvUserCosmeticsDetailed('123');
+    expect(result.ok).toBe(true);
+    expect(result.value?.namePaint).toMatchObject({
+      id: '01FQ8S87J8000BDD0YMN21KEXG',
+      function: 'LINEAR_GRADIENT', repeat: true, angle: 45,
+      stops: [{ at: 0.1, color: -757935361 }, { at: 0.2, color: -10197761 }],
+      text: { weight: 6, transform: 'uppercase', stroke: { width: 2, color: -757935361 },
+        shadows: [{ xOffset: 1, yOffset: 2, radius: 3, color: -10197761 }] },
+    });
+  });
+
   it('treats a Twitch user with no 7TV account as an ordinary empty result', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 404 })));
     await expect(fetchSevenTvUserCosmeticsDetailed('missing')).resolves.toEqual({ value: null, ok: true });
