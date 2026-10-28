@@ -447,13 +447,16 @@ subscriptions, and gifted subscriptions into the same normalized contracts
 used by Twitch. Host/pin/poll/unban payloads remain structured `system` events
 instead of being mislabeled.
 
-The Pusher lifecycle honors the negotiated `activity_timeout`, waits for the
-handshake before subscribing, and only resets reconnect backoff after the
-connection becomes genuinely usable. When a resolved Kick channel ID is
-available, the connector subscribes to both `chatrooms.<id>.v2` and
-`channel.<channelId>` and waits for both acknowledgements before reporting
-`connected`; this preserves channel-level subscription/gift events that are not
-carried by the chatroom feed alone.
+Kick realtime is negotiated per connection through Kick's web realtime
+descriptor instead of pinning a provider credential. The connector prefers the
+Centrifugo endpoint Kick currently returns, mints an anonymous guest token,
+asks the resolved channel for its chat endpoint, subscribes the current
+channel/chatroom topics, answers server pings, refreshes expiring connection
+tokens, and reports `connected` only after every subscription is acknowledged.
+Centrifugo publications are unwrapped back into the same Kick event envelope
+used by the normalizer. If Kick negotiates Pusher instead, Chatbus builds that
+socket from the returned app key/cluster and preserves the existing
+subscription and reconnect semantics; no retired Pusher key is required.
 
 ## Precedence
 

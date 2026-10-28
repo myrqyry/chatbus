@@ -179,11 +179,29 @@ describe('Kick normalization', () => {
 });
 
 describe('Kick socket lifecycle', () => {
+  const endpoint='wss://realtime.us-east-1.platform.kick.com/connection/websocket';
+  let fetcher:ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     MockWebSocket.instances = [];
     vi.useFakeTimers();
     vi.stubGlobal('WebSocket', MockWebSocket);
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    fetcher=vi.fn(async(input:string|URL|Request)=>{
+      const url=String(input);
+      if(url.endsWith('/api/v1/realtime/auth/connection')){
+        return new Response(JSON.stringify({data:{token:'guest-token'}}),{
+          status:200,headers:{'content-type':'application/json'},
+        });
+      }
+      if(url.includes('/api/v1/realtime/')){
+        return new Response(JSON.stringify({data:{mode:'websocket',connections:[
+          {provider:'centrifugo',credentials:{url:endpoint}},
+        ]}}),{status:200,headers:{'content-type':'application/json'}});
+      }
+      throw new Error('unexpected fetch '+url);
+    });
+    vi.stubGlobal('fetch',fetcher);
   });
 
   afterEach(() => {
@@ -192,109 +210,87 @@ describe('Kick socket lifecycle', () => {
     vi.unstubAllGlobals();
   });
 
-  it('waits for Pusher readiness and honors the negotiated activity timeout', () => {
-    const states: string[] = [];
-    const handle = createKickSocket(42, {
-      onStateChange: (state) => states.push(state),
-    });
-    const ws = MockWebSocket.instances[0];
+  it('negotiates Centrifugo, authenticates, subscribes all current Kick chat feeds, and only then reports connected', async () => {
+    const states:string[]=[];
+    const handle=createKickSocket(42,{channelId:'99',onStateChange:s=>states.push(s)});
 
+    await vi.waitFor(()=>expect(MockWebSocket.instances).toHaveLength(1));
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://web.kick.com/api/v1/realtime/connection',
+      expect.objectContaining({method:'POST'}),
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://web.kick.com/api/v1/realtime/channels/99/chat/connection',
+      expect.objectContaining({method:'POST'}),
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://web.kick.com/api/v1/realtime/auth/connection',
+      expect.objectContaining({method:'POST'}),
+    );
+
+    const ws=MockWebSocket.instances[0];
+    expect(ws.url).toBe(endpoint);
     ws.emitOpen();
-    expect(states).toEqual(['connecting']);
-    expect(ws.sent).toEqual([]);
-
-    ws.emitMessage(JSON.stringify({
-      event: 'pusher:connection_established',
-      data: JSON.stringify({ socket_id: '1.2', activity_timeout: 120 }),
-    }));
-    expect(JSON.parse(ws.sent[0])).toMatchObject({
-      event: 'pusher:subscribe',
-      data: { channel: 'chatrooms.42.v2' },
-    });
-
-    ws.emitMessage(JSON.stringify({
-      event: 'pusher_internal:subscription_succeeded',
-      channel: 'chatrooms.42.v2',
-      data: '{}',
-    }));
-    expect(states.at(-1)).toBe('connected');
-
-    vi.advanceTimersByTime(95_000);
-    expect(ws.closeCount).toBe(0);
-
-    handle.close();
-  });
-
-  it('subscribes to both chatroom and channel feeds before declaring readiness', () => {
-    const states: string[] = [];
-    const handle = createKickSocket(42, {
-      channelId: '99',
-      onStateChange: (state) => states.push(state),
-    });
-    const ws = MockWebSocket.instances[0];
-    ws.emitOpen();
-    ws.emitMessage(JSON.stringify({
-      event: 'pusher:connection_established',
-      data: JSON.stringify({ socket_id: '1.2', activity_timeout: 120 }),
-    }));
-    expect(ws.sent.map((entry) => JSON.parse(entry).data.channel)).toEqual([
-      'chatrooms.42.v2',
-      'channel.99',
-    ]);
-
-    ws.emitMessage(JSON.stringify({
-      event: 'pusher_internal:subscription_succeeded',
-      channel: 'chatrooms.42.v2',
-      data: '{}',
-    }));
+    const connect=JSON.parse(ws.sent[0]!);
+    expect(connect).toMatchObject({connect:{token:'guest-token',name:'js'}});
     expect(states.at(-1)).toBe('connecting');
 
-    ws.emitMessage(JSON.stringify({
-      event: 'pusher_internal:subscription_succeeded',
-      channel: 'channel.99',
-      data: '{}',
-    }));
+    ws.emitMessage(JSON.stringify({id:connect.id,connect:{expires:true,ttl:2700,ping:25}}));
+    const subscriptions=ws.sent.slice(1).map(entry=>JSON.parse(entry));
+    expect(subscriptions.map(frame=>frame.subscribe?.channel)).toEqual([
+      'channel_99','channel.99','chatroom_42','chatrooms.42','chatrooms.42.v2',
+    ]);
+    expect(states.at(-1)).toBe('connecting');
+
+    for(const frame of subscriptions){
+      ws.emitMessage(JSON.stringify({id:frame.id,subscribe:{recoverable:false}}));
+    }
     expect(states.at(-1)).toBe('connected');
     handle.close();
   });
 
-  it('keeps exponential backoff across WebSocket opens until Pusher is usable', () => {
-    const handle = createKickSocket(42);
+  it('unwraps Centrifugo publications into the existing Kick event envelope and answers server pings', async()=>{
+    const frames:string[]=[];
+    const handle=createKickSocket(42,{channelId:'99',onMessage:value=>frames.push(value)});
+    await vi.waitFor(()=>expect(MockWebSocket.instances).toHaveLength(1));
+    const ws=MockWebSocket.instances[0];
+    ws.emitOpen();
+    const connect=JSON.parse(ws.sent[0]!);
+    ws.emitMessage(JSON.stringify({id:connect.id,connect:{ping:25}}));
+    const subscriptions=ws.sent.slice(1).map(entry=>JSON.parse(entry));
+    for(const frame of subscriptions)ws.emitMessage(JSON.stringify({id:frame.id,subscribe:{}}));
 
-    const first = MockWebSocket.instances[0];
-    first.emitOpen();
-    first.emitClose();
+    ws.emitMessage('{}');
+    expect(ws.sent.at(-1)).toBe('{}');
 
-    vi.advanceTimersByTime(999);
-    expect(MockWebSocket.instances).toHaveLength(1);
-    vi.advanceTimersByTime(1);
-    expect(MockWebSocket.instances).toHaveLength(2);
+    const data={
+      id:'message-1',chatroom_id:42,content:'hello',
+      created_at:'2026-10-27T20:00:00Z',sender:{id:7,username:'viewer'},
+    };
+    ws.emitMessage(JSON.stringify({push:{channel:'chatrooms.42.v2',pub:{data:{
+      event:'App\\Events\\ChatMessageEvent',data:JSON.stringify(data),
+    }}}}));
+    expect(frames).toHaveLength(1);
+    expect(parseKickPusherFrame(frames[0]!)).toMatchObject({
+      type:'ChatMessage',data:{id:'message-1',content:'hello'},
+    });
+    handle.close();
+  });
 
-    const second = MockWebSocket.instances[1];
-    second.emitOpen();
-    second.emitClose();
-
-    vi.advanceTimersByTime(1_000);
-    expect(MockWebSocket.instances).toHaveLength(2);
-    vi.advanceTimersByTime(1_000);
-    expect(MockWebSocket.instances).toHaveLength(3);
-
-    const third = MockWebSocket.instances[2];
-    third.emitOpen();
-    third.emitMessage(JSON.stringify({
-      event: 'pusher:connection_established',
-      data: JSON.stringify({ socket_id: '3.4', activity_timeout: 120 }),
-    }));
-    third.emitMessage(JSON.stringify({
-      event: 'pusher_internal:subscription_succeeded',
-      channel: 'chatrooms.42.v2',
-      data: '{}',
-    }));
-    third.emitClose();
-
-    vi.advanceTimersByTime(1_000);
-    expect(MockWebSocket.instances).toHaveLength(4);
-
+  it('uses a dynamically negotiated Pusher endpoint as fallback instead of a retired hard-coded app key', async()=>{
+    fetcher.mockImplementation(async(input:string|URL|Request)=>{
+      const url=String(input);
+      if(url.includes('/api/v1/realtime/')){
+        return new Response(JSON.stringify({data:{mode:'websocket',connections:[
+          {provider:'pusher',credentials:{app_key:'freshkey123',cluster:'us2'}},
+        ]}}),{status:200,headers:{'content-type':'application/json'}});
+      }
+      throw new Error('unexpected fetch '+url);
+    });
+    const handle=createKickSocket(42,{channelId:'99'});
+    await vi.waitFor(()=>expect(MockWebSocket.instances).toHaveLength(1));
+    expect(MockWebSocket.instances[0]!.url).toContain('ws-us2.pusher.com/app/freshkey123');
+    expect(MockWebSocket.instances[0]!.url).not.toContain('32cbd69e4b950bf97679');
     handle.close();
   });
 });
