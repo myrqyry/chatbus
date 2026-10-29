@@ -163,6 +163,8 @@ export type {
   TestMessageEventOptions,
 } from './testing/events';
 
+export { parseKickSubscriberBadges,fetchKickChannelBadgeJson,createKickBadgeCatalog } from './platforms/kick/badges';
+export type { KickSubscriberBadgeArtwork,KickBadgeCatalog,KickBadgeCatalogState } from './platforms/kick/badges';
 export { resolveKickChannel } from './platforms/kick/channel';
 export type { ResolveKickChannelOptions } from './platforms/kick/channel';
 export { connectKickChat } from './platforms/kick/connect';
