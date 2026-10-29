@@ -2,6 +2,7 @@ import { parseMessageFragments } from '../../messages/parse';
 import type { ChatEvent, ChatMessage, ChatUser } from '../../types/chat';
 import type { BadgeRef } from '../../types/identity';
 import { parseKickMessageContent } from './emotes';
+import { parseKickUserBadgesV2 } from './badges';
 import type {
   KickChatMessagePayload,
   KickNormalizeContext,
@@ -41,6 +42,7 @@ const badgeRefsFrom = (sender: KickSender): BadgeRef[] | undefined => {
 
 const userFromSender = (sender: KickSender): ChatUser => {
   const badgeRefs = badgeRefsFrom(sender);
+  const badges = parseKickUserBadgesV2(sender.identity?.badges_v2);
   const roles = badgeRefs?.map((ref) => ref.id);
   return {
     platform: 'kick',
@@ -50,6 +52,7 @@ const userFromSender = (sender: KickSender): ChatUser => {
     color: sender.identity?.color || undefined,
     roles: roles && roles.length > 0 ? roles : undefined,
     badgeRefs,
+    ...(badges.length>0?{badges}:{}),
     raw: sender,
   };
 };

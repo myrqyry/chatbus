@@ -1,4 +1,4 @@
-# Kick channel subscriber badge artwork
+# Kick native badge artwork
 
 Chatbus emits Kick `badgeRefs` from live chat identity metadata. The realtime
 payload currently provides role/type and subscriber count, not image URLs.
@@ -20,3 +20,21 @@ channel results. Fetch/parse failure never prevents chat from connecting.
 The endpoint is unofficial and can change. This is best-effort enrichment,
 not evidence that all Kick badge kinds are supported. Tests use deterministic
 fixtures; actual renderers should verify that artwork URLs load.
+
+## Image-backed badges from `badges_v2`
+
+Kick realtime and recent-message sender identities expose `badges_v2` entries
+with `name`, `badge_type`, `image_url`, `selected`, and `sort_order`. Chatbus
+normalizes explicitly selected entries directly to `ChatUser.badges` without
+fetching or hardcoding a global badge catalog. These include event cosmetics
+such as Flyby, GoldenK, GOAT, and other names, plus level badges.
+
+`parseKickUserBadgesV2` only admits HTTPS artwork on
+`ext.cdn.kick.com/chat/badges/`, checks the declared type, deduplicates entries,
+and preserves source ordering. `selected:false` entries are **not** displayed:
+the upstream object can include badges the user owns but has not selected.
+The existing legacy `identity.badges` subscriber references remain independent
+and are resolved against channel subscriber milestones as described above.
+
+No background per-user lookup is necessary; images arrive with each message.
+This applies to future badges using the same valid native payload shape.

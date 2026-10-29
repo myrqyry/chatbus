@@ -1,6 +1,6 @@
 import { describe,expect,it } from 'vitest';
 import {
-  createKickBadgeCatalog, parseKickSubscriberBadges,
+  createKickBadgeCatalog, parseKickSubscriberBadges, parseKickUserBadgesV2, normalizeKickEvent,
 } from '../src/index';
 
 const url=(id:number)=>`https://files.kick.com/channel_subscriber_badges/${id}/conversion/original-fullsize.png`;
@@ -60,5 +60,53 @@ describe('Kick badge normalization and discovery',()=>{
     expect(catalog.health()).toBe('degraded');
     await catalog.loadChannel('some_channel',()=>{});
     expect(count).toBe(1);
+  });
+});
+
+
+describe('Kick native image-backed badges (badges_v2)',()=>{
+  const cdn='https://ext.cdn.kick.com/chat/badges/';
+  const flyby=cdn+'Flyby_019f591a-e1bb-7a1a-be0a-97d8d1ae1a91.png';
+  const goat=cdn+'GOAT_019f591b-30ae-7285-8377-293e708a5e30.png';
+  it('preserves selected global badges and their provider-authored order, without external lookup',()=>{
+    const raw=[
+      {name:'Flyby',badge_type:'global',image_url:flyby,selected:true,sort_order:4},
+      {name:'GOAT',badge_type:'global',image_url:goat,selected:true,sort_order:2},
+      {name:'level',badge_type:'global',image_url:cdn+'46_1629c3f5-cd67-4189-a508-be557265254d.png',selected:false,sort_order:1},
+      {name:'Flyby',badge_type:'global',image_url:flyby,selected:true,sort_order:4},
+    ];
+    const badges=parseKickUserBadgesV2(raw);
+    expect(badges).toMatchObject([
+      {id:'GOAT',provider:'kick',scope:'global',images:[{url:goat}]},
+      {id:'Flyby',provider:'kick',scope:'global',images:[{url:flyby}]},
+    ]);
+    expect(badges).toHaveLength(2);
+  });
+  it('rejects unselected, malformed and non-Kick hosted images',()=>{
+    expect(parseKickUserBadgesV2([
+      {name:'bad',badge_type:'global',image_url:'https://ext.cdn.kick.com.evil.invalid/chat/badges/a.png',selected:true},
+      {name:'bad',badge_type:'global',image_url:'https://other.example/chat/badges/a.png',selected:true},
+      {name:'bad',badge_type:'global',image_url:'javascript:alert(1)',selected:true},
+      {name:'bad',badge_type:'global',image_url:cdn+'../payload.png',selected:true},
+      {name:'bad',badge_type:'global',image_url:cdn+'name.svg',selected:true},
+      {name:'bad',badge_type:'global',image_url:cdn+'Badge_123.png',selected:false},
+      {name:'bad',badge_type:'global',image_url:cdn+'Badge_123.png'},
+      {name:'bad',badge_type:'unknown',image_url:cdn+'Badge_123.png',selected:true},
+    ])).toEqual([]);
+  });
+  it('normalizes actual Kick sender metadata into badges while retaining subscriber refs',()=>{
+    const event=normalizeKickEvent({type:'ChatMessage',data:{
+      id:'kick-id-1',chatroom_id:92721,content:'hello',created_at:'2026-10-28T16:00:00Z',
+      sender:{id:19,username:'viewer',identity:{
+        badges:[{type:'subscriber',text:'Subscriber',count:2}],
+        badges_v2:[
+          {name:'Flyby',badge_type:'global',image_url:flyby,selected:true,sort_order:4},
+          {name:'level',badge_type:'global',image_url:cdn+'50_b83d144a-3f6f-4bbe-a50c-80aebc21420b.png',metadata:{level:50},selected:false,sort_order:1},
+        ],
+      }},
+    }},{channelName:'nickwhite'});
+    expect(event?.message?.user.badgeRefs).toMatchObject([{id:'subscriber',provider:'kick',version:'2'}]);
+    expect(event?.message?.user.badges).toMatchObject([{id:'Flyby',provider:'kick',images:[{url:flyby}]}]);
+    expect(event?.message?.user.badges).toHaveLength(1);
   });
 });

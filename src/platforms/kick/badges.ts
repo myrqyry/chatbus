@@ -31,6 +31,42 @@ export function parseKickSubscriberBadges(payload:unknown):KickSubscriberBadgeAr
   return [...tiers].sort((a,b)=>a[0]-b[0]).map(([months,url])=>({months,url}));
 }
 
+/** Native Kick v2 chat badges supply their own artwork in sender identity.
+ * `selected` distinguishes the user's displayed cosmetics from ownership.
+ * No badge-name registry or channel lookup is required for these assets.
+ */
+export function parseKickUserBadgesV2(payload:unknown):Badge[] {
+  if(!Array.isArray(payload))return [];
+  const seen=new Set<string>();
+  const output:{order:number;badge:Badge}[]=[];
+  for(const value of payload.slice(0,60)) {
+    if(!isRecord(value) || value.selected!==true)continue;
+    const name=value.name;
+    const type=value.badge_type;
+    const image=value.image_url;
+    if(typeof name!=='string'||name.length<1||name.length>100||! /^[a-zA-Z0-9_-]+$/.test(name))continue;
+    if(type!=='global' && type!=='channel' && type!=='user')continue;
+    if(typeof image!=='string'||image.length>1024)continue;
+    let url:URL;
+    try {url=new URL(image);}catch{continue;}
+    if(url.protocol!=='https:'||url.hostname!=='ext.cdn.kick.com'||url.port||url.username||url.password||url.hash)continue;
+    if(!/^\/chat\/badges\/[a-zA-Z0-9_-]{1,200}\.(?:png|webp)$/i.test(url.pathname))continue;
+    // Kick's web UI optionally requests a bounded, CDN-native resized image.
+    if(url.search && !/^\?width=(?:[1-9]\d{0,2}),format=webp,quality=(?:[1-9]\d?|100)$/.test(url.search))continue;
+    const key=type+':'+name;
+    if(seen.has(key))continue;
+    seen.add(key);
+    const level=isRecord(value.metadata)?value.metadata.level:undefined;
+    const label=name==='level' && typeof level==='number' && Number.isInteger(level) && level>=1 && level<=10000
+      ? `Level ${level}` : name;
+    output.push({
+      order:typeof value.sort_order==='number' && Number.isFinite(value.sort_order) ? value.sort_order : 10000,
+      badge:{provider:'kick',id:name,scope:type,name:label,images:[{url:url.href}]},
+    });
+  }
+  return output.sort((a,b)=>a.order-b.order).map(entry=>entry.badge);
+}
+
 /** Bound the source size and duration: even malformed provider JSON must not delay chat. */
 export async function fetchKickChannelBadgeJson(url:string):Promise<unknown> {
   const response=await fetch(url,{signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});
