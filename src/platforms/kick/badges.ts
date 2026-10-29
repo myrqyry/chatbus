@@ -40,8 +40,11 @@ export function parseKickUserBadgesV2(payload:unknown):Badge[] {
   const seen=new Set<string>();
   const output:{order:number;badge:Badge}[]=[];
   for(const value of payload.slice(0,60)) {
-    if(!isRecord(value) || value.selected!==true)continue;
+    if(!isRecord(value))continue;
     const name=value.name;
+    // Kick renders Level SVGs even for selected=false entries. Unlike
+    // optional cosmetics, this level marker is not user-selected.
+    if(value.selected!==true && name!=='level')continue;
     const type=value.badge_type;
     const image=value.image_url;
     if(typeof name!=='string'||name.length<1||name.length>100||! /^[a-zA-Z0-9_-]+$/.test(name))continue;
@@ -57,6 +60,7 @@ export function parseKickUserBadgesV2(payload:unknown):Badge[] {
     if(seen.has(key))continue;
     seen.add(key);
     const level=isRecord(value.metadata)?value.metadata.level:undefined;
+    if(name==='level' && value.selected!==true && !(typeof level==='number' && Number.isInteger(level) && level>=1 && level<=10000))continue;
     const label=name==='level' && typeof level==='number' && Number.isInteger(level) && level>=1 && level<=10000
       ? `Level ${level}` : name;
     output.push({

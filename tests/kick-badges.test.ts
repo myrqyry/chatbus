@@ -68,19 +68,20 @@ describe('Kick native image-backed badges (badges_v2)',()=>{
   const cdn='https://ext.cdn.kick.com/chat/badges/';
   const flyby=cdn+'Flyby_019f591a-e1bb-7a1a-be0a-97d8d1ae1a91.png';
   const goat=cdn+'GOAT_019f591b-30ae-7285-8377-293e708a5e30.png';
-  it('preserves selected global badges and their provider-authored order, without external lookup',()=>{
+  it('preserves displayed global and level badges in source order, without external lookup',()=>{
     const raw=[
       {name:'Flyby',badge_type:'global',image_url:flyby,selected:true,sort_order:4},
       {name:'GOAT',badge_type:'global',image_url:goat,selected:true,sort_order:2},
-      {name:'level',badge_type:'global',image_url:cdn+'46_1629c3f5-cd67-4189-a508-be557265254d.png',selected:false,sort_order:1},
+      {name:'level',badge_type:'global',image_url:cdn+'46_1629c3f5-cd67-4189-a508-be557265254d.png',metadata:{level:46},selected:false,sort_order:1},
       {name:'Flyby',badge_type:'global',image_url:flyby,selected:true,sort_order:4},
     ];
     const badges=parseKickUserBadgesV2(raw);
     expect(badges).toMatchObject([
+      {id:'level',name:'Level 46',provider:'kick'},
       {id:'GOAT',provider:'kick',scope:'global',images:[{url:goat}]},
       {id:'Flyby',provider:'kick',scope:'global',images:[{url:flyby}]},
     ]);
-    expect(badges).toHaveLength(2);
+    expect(badges).toHaveLength(3);
   });
   it('rejects unselected, malformed and non-Kick hosted images',()=>{
     expect(parseKickUserBadgesV2([
@@ -106,7 +107,7 @@ describe('Kick native image-backed badges (badges_v2)',()=>{
       }},
     }},{channelName:'nickwhite'});
     expect(event?.message?.user.badgeRefs).toMatchObject([{id:'subscriber',provider:'kick',version:'2'}]);
-    expect(event?.message?.user.badges).toMatchObject([{id:'Flyby',provider:'kick',images:[{url:flyby}]}]);
-    expect(event?.message?.user.badges).toHaveLength(1);
+    expect(event?.message?.user.badges).toMatchObject([{id:'level',name:'Level 50',provider:'kick'}, {id:'Flyby',provider:'kick',images:[{url:flyby}]}]);
+    expect(event?.message?.user.badges).toHaveLength(2);
   });
 });

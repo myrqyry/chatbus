@@ -25,14 +25,19 @@ fixtures; actual renderers should verify that artwork URLs load.
 
 Kick realtime and recent-message sender identities expose `badges_v2` entries
 with `name`, `badge_type`, `image_url`, `selected`, and `sort_order`. Chatbus
-normalizes explicitly selected entries directly to `ChatUser.badges` without
-fetching or hardcoding a global badge catalog. These include event cosmetics
-such as Flyby, GoldenK, GOAT, and other names, plus level badges.
+normalizes valid image-backed entries directly to `ChatUser.badges` without
+fetching or hardcoding a global badge catalog. Optional cosmetics such as
+Flyby, GoldenK, and GOAT require `selected:true`; a `level` badge with valid
+level metadata is displayed even when `selected:false`, matching observed Kick
+chat UI behavior where level symbols appear as inline SVGs.
 
 `parseKickUserBadgesV2` only admits HTTPS artwork on
 `ext.cdn.kick.com/chat/badges/`, checks the declared type, deduplicates entries,
-and preserves source ordering. `selected:false` entries are **not** displayed:
-the upstream object can include badges the user owns but has not selected.
+and preserves source ordering. For optional cosmetics, `selected:false`
+entries are **not** displayed: the upstream object can include badges the user
+owns but has not selected. The `level` exception is intentionally narrow. Kick
+provides a hosted level `image_url` alongside its inline browser SVG; the
+rendered image may not be pixel-identical to that SVG.
 The existing legacy `identity.badges` subscriber references remain independent
 and are resolved against channel subscriber milestones as described above.
 
