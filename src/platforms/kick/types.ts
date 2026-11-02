@@ -154,6 +154,9 @@ export interface KickConnectOptions {
   emotes?: EmoteSet;
   getEmotes?: () => EmoteSet;
   signal?: AbortSignal;
+  /** Emit a bounded recent-chat snapshot before buffered realtime events. */
+  emitInitialHistory?: boolean;
+  initialHistoryLimit?: number;
   resolveChannel?: (channel: string, signal?: AbortSignal) => Promise<KickResolvedChannel>;
   socket?: Omit<KickSocketOptions, 'onOpen' | 'onMessage' | 'onClose' | 'onError' | 'onStateChange'>;
   onEvent: (event: ChatEvent) => void;

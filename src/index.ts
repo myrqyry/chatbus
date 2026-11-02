@@ -168,6 +168,8 @@ export type { KickSubscriberBadgeArtwork,KickBadgeCatalog,KickBadgeCatalogState 
 export { resolveKickChannel } from './platforms/kick/channel';
 export type { ResolveKickChannelOptions } from './platforms/kick/channel';
 export { connectKickChat } from './platforms/kick/connect';
+export { fetchKickRecentMessages } from './platforms/kick/history';
+export type { KickHistoryOptions } from './platforms/kick/history';
 export { kickEmoteUrl, parseKickMessageContent } from './platforms/kick/emotes';
 export type { ParsedKickMessageContent } from './platforms/kick/emotes';
 export { normalizeKickEvent } from './platforms/kick/normalize';

@@ -9,3 +9,4 @@ Negotiated Kick realtime transport and normalized social events.
 - `ChannelSubscriptionEvent` and `LuckyUsersWhoGotGiftSubscriptionsEvent` normalize through Chatbus; consumers should not need a parallel Kick socket solely for those events.
 - Keep reconnect/backoff state tied to a genuinely usable connection, not merely a WebSocket HTTP upgrade.
 - Host/pin/poll/unban events remain structured `system` events unless a real cross-platform semantic contract exists. Do not relabel a Kick host as a Twitch-style raid just for convenience.
+- Initial recent chat is optional (`emitInitialHistory`) because it uses Kick's internal web-client `GET /api/v2/channels/{channelId}/messages` endpoint, not the public API. Open realtime immediately, buffer events while history is in flight, emit bounded history oldest-first, dedupe overlap by message ID, then flush realtime. History failure must never prevent realtime chat.

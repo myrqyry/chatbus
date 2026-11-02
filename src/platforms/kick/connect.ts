@@ -1,6 +1,8 @@
 import type { KickChatConnection, KickConnectOptions, KickResolvedChannel } from './types';
 import { resolveKickChannel } from './channel';
 import { normalizeKickEvent } from './normalize';
+import { fetchKickRecentMessages } from './history';
+import type { ChatEvent } from '../../types/chat';
 import { parseKickPusherFrame } from './protocol';
 import { createKickSocket } from './socket';
 
@@ -28,6 +30,37 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
     throw new DOMException('The operation was aborted.', 'AbortError');
   }
 
+  let closed = false;
+  let historyPending = options.emitInitialHistory === true && Boolean(channel.channelId);
+  const historyController = new AbortController();
+  const buffered: ChatEvent[] = [];
+  const seenMessageIds = new Set<string>();
+  const remember = (id: string) => {
+    seenMessageIds.add(id);
+    while (seenMessageIds.size > 500) {
+      const oldest = seenMessageIds.values().next().value as string | undefined;
+      if (oldest === undefined) break;
+      seenMessageIds.delete(oldest);
+    }
+  };
+  const deliver = (event: ChatEvent) => {
+    if (closed) return;
+    const id = event.type === 'message' ? event.message?.id : undefined;
+    if (id && seenMessageIds.has(id)) return;
+    if (id) remember(id);
+    options.onEvent(event);
+  };
+  const receiveRealtime = (event: ChatEvent) => {
+    if (closed) return;
+    if (historyPending) buffered.push(event);
+    else deliver(event);
+  };
+  const flushRealtime = () => {
+    historyPending = false;
+    if (closed) { buffered.length = 0; return; }
+    for (const event of buffered.splice(0)) deliver(event);
+  };
+
   const socket = createKickSocket(channel.chatroomId, {
     ...options.socket,
     channelId: channel.channelId,
@@ -41,11 +74,28 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
         channelId: channel.channelId ?? String(channel.chatroomId),
         emotes: options.getEmotes?.() ?? options.emotes,
       });
-      if (event) options.onEvent(event);
+      if (event) receiveRealtime(event);
     },
   });
 
-  const close = () => socket.close();
+  if (historyPending) {
+    void fetchKickRecentMessages(channel, {
+      limit: options.initialHistoryLimit,
+      signal: historyController.signal,
+    }).then(events => {
+      if (closed) return;
+      for (const event of events) deliver(event);
+      flushRealtime();
+    }, () => flushRealtime());
+  }
+
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    historyController.abort();
+    buffered.length = 0;
+    socket.close();
+  };
   options.signal?.addEventListener('abort', close, { once: true });
 
   return {
