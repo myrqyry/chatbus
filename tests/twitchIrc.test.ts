@@ -55,6 +55,20 @@ describe('Twitch IRC exact parser and normalized events', () => {
     expect(event?.origin).toBeUndefined();
   });
 
+  it('normalizes CTCP ACTION without exposing control characters or losing emote offsets', () => {
+    const body='david1118_ lost 63 points! Kappa';
+    const raw='\x01ACTION '+body+'\x01';
+    const line=privmsg(raw).replace('emotes=25:0-4',`emotes=25:${8+body.indexOf('Kappa')}-${8+body.indexOf('Kappa')+4}`);
+    const event=normalizeTwitchIrcFrame(parse(line),{channel:'host'});
+    expect(event?.message?.text).toBe(body);
+    expect(event?.message?.traits?.messageType).toBe('action');
+    expect(event?.message?.fragments.at(-1)).toMatchObject({type:'emote',text:'Kappa'});
+    const plain=normalizeTwitchIrcFrame(parse(privmsg('ACTION '+body)),{channel:'host'});
+    expect(plain?.message?.text).toBe('ACTION '+body);
+    const unclosed=normalizeTwitchIrcFrame(parse(privmsg('\x01ACTION '+body)),{channel:'host'});
+    expect(unclosed?.message?.text).toBe('\x01ACTION '+body);
+  });
+
   it('rejects channel spoofing and command-string matches in text', () => {
     expect(normalizeTwitchIrcFrame(parse(privmsg().replace('PRIVMSG #host', 'PRIVMSG #other')), { channel: 'host' })).toBeNull();
     expect(normalizeTwitchIrcFrame(parse(':viewer!x@y NOTICE #host :PRIVMSG fake'), { channel: 'host' })).toBeNull();

@@ -156,7 +156,9 @@ export function normalizeTwitchIrcFrame(
     } };
   }
 
-  const text = params[1] ?? '';
+  const incomingText = params[1] ?? '';
+  const isAction = command === 'PRIVMSG' && incomingText.startsWith('\x01ACTION ') && incomingText.endsWith('\x01');
+  const text = isAction ? incomingText.slice(8, -1) : incomingText;
   const id = optionalTag(tags, 'id') ?? context.fallbackId;
   if (!id) return null;
   const nativeEmotes: Record<string, string[]> = {};
@@ -166,7 +168,11 @@ export function normalizeTwitchIrcFrame(
   }
   const fragments = parseMessageFragments(text, {
     emotes: context.emotes,
-    nativeEmotes: twitchEmoteSpansFromTag(nativeEmotes),
+    nativeEmotes: twitchEmoteSpansFromTag(nativeEmotes).flatMap(span => {
+      if (!isAction) return [span];
+      return span.start >= 8 && span.end < incomingText.length - 1
+        ? [{ ...span, start: span.start - 8, end: span.end - 8 }] : [];
+    }),
   });
   const replyToMessageId = optionalTag(tags, 'reply-parent-msg-id');
   const source = sourceFromTags(tags);
@@ -180,6 +186,7 @@ export function normalizeTwitchIrcFrame(
         parentMessageBody: optionalTag(tags, 'reply-parent-msg-body') } } : {}),
     ...(source ? { source } : {}),
     traits: {
+      ...(isAction ? { messageType: 'action' } : {}),
       ...(tags['first-msg'] === '1' ? { firstMessage: true } : {}),
       ...(tags['msg-id'] === 'highlighted-message' ? { highlighted: true } : {}),
       ...(optionalTag(tags, 'custom-reward-id') ? { customRewardId: tags['custom-reward-id'] } : {}),
