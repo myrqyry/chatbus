@@ -350,3 +350,6 @@ export type {
   YouTubeSuperChatDetails,
   YouTubeSuperStickerDetails,
 } from './platforms/youtube/types';
+
+export {beginOAuth,exchangeOAuthCode,refreshOAuthToken} from './auth/oauth';
+export type {OAuthProvider,OAuthClient,OAuthBeginOptions,OAuthTokenOptions,OAuthRefreshOptions,OAuthTokens,OAuthFetcher} from './auth/oauth';
