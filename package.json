@@ -12,14 +12,21 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./streamlabs": "./src/platforms/streamlabs/index.ts"
+    "./streamlabs": "./src/platforms/streamlabs/index.ts",
+    "./relay": "./src/relay/index.ts",
+    "./server": "./src/relay/server.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/ws": "^8.18.2",
     "typescript": "~5.8.3",
     "vitest": "^4.1.5"
+  },
+  "dependencies": {
+    "ws": "^8.22.1"
   }
 }

@@ -2,7 +2,7 @@
 
 Framework-neutral livestream chat substrate (emotes, fragments, normalized events, connection lifecycle, timeline, replay). Apps own rendering.
 
-- Single package. Main entry: `src/index.ts` (`main`/`types`/`exports["."]`). Optional isolated `exports["./streamlabs"]` for the native-WebSocket Engine.IO v3 adapter. No workspaces.
+- Single package. Main entry: `src/index.ts` (`main`/`types`/`exports["."]`). Optional isolated exports: `./streamlabs` for the native-WebSocket Engine.IO v3 adapter, `./relay` for the browser-safe Chatbus relay client/protocol, and `./server` for the Node-only same-origin WebSocket relay adapter. No workspaces.
 - `src/`: `emotes/`, `identity/`, `messages/`, `network/`, `platforms/kick/`, `platforms/twitch/`, `platforms/youtube/`, `platforms/streamlabs/`, `seventv/`, `testing/`, `types/`, `bus.ts`, `timeline.ts`. `tests/`: Vitest files, no vitest config.
 - Contracts live in `docs/`: `emote-precedence-and-assets.md`, `seventv-personal-entitlements.md`, `chat-timeline-and-hype-train.md`, `twitch-capabilities-and-replay.md`, `youtube-live-chat.md`. Trust them + code over `README` examples.
 
