@@ -449,6 +449,17 @@ This composes directly with recorder/replay: captured events can be replayed
 through the same reducer to reproduce the visible overlay state that existed
 when a bug occurred.
 
+## Kick profile pictures for multichat
+
+`fetchKickUserAvatar(slug)` returns the channel owner's `user.profile_pic`
+URL from Kick's public web-client channel endpoint, or `null` when missing.
+Chatbus validates the owning user ID and an HTTPS image hosted under Kick's
+`files.kick.com/images/user/<id>/profile_image/` path. It coalesces simultaneous
+lookups, caches successful results for 30 minutes and failures for one minute,
+and never blocks chat on an unavailable image. Use `clearKickAvatarCache()`
+to clear the in-memory cache. This web-client endpoint is undocumented; no
+image URLs are guessed from account names. Rendering remains the consumer's job.
+
 ## Kick chat
 
 `connectKickChat()` provides a browser-native Kick transport without pulling

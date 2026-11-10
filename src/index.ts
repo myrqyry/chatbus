@@ -99,6 +99,7 @@ export { clearSevenTvPaintV4Cache, fetchSevenTvPaintV4Detailed } from './identit
 export { fetchJson, fetchWithTimeout, isAbortError } from './network/fetch';
 export { resolveTwitchUserId } from './emotes/twitch';
 export { clearTwitchAvatarCache, fetchTwitchUserAvatar } from './identity/twitchAvatar';
+export { clearKickAvatarCache, fetchKickUserAvatar } from './identity/kickAvatar';
 export {
   fetchChannelSevenTv,
   fetchGlobalSevenTv,
