@@ -249,6 +249,17 @@ console.log(connection.cheermotes());
 Revocations remove the affected subscription from that state and can be
 observed through `onSubscriptionStateChange`.
 
+### Twitch profile pictures for multichat
+
+The exported fetchTwitchUserAvatar(login) returns a public Twitch profile-image
+URL (or null) without requiring a bot token. It uses the public IVR mirror's
+logo field, not authenticated Helix Users. Only static-cdn.jtvnw.net profile
+artwork is accepted. Results are cached for 30 minutes, failures for one
+minute, and concurrent requests for the same login are coalesced.
+The optional lookup never holds up chat. clearTwitchAvatarCache() clears the
+cache. Consumers choose whether to use the image as a source badge or
+viewer avatar. The mirror is an unofficial third-party service.
+
 ### Twitch native emote catalog and assets
 
 The validated Twitch auth returned by `connectTwitchChat()` can also load
