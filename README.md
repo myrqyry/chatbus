@@ -3,7 +3,7 @@
 ![Chatbus — a chat bus with cat-ear accents and message windows](assets/chatbus.png)
 
 `@myrqyry/chatbus` is a framework-neutral livestream social substrate shared by
-the Noita and Sketchy overlays and suitable for desktop/agent consumers. It owns
+stream overlays and suitable for desktop/agent consumers. It owns
 Twitch, Kick, and YouTube Live transports; native and third-party emote discovery;
 message fragments; identity metadata; normalized social events; platform
 connection lifecycle; live provider and entitlement state; capability planning;
