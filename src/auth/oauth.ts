@@ -1,6 +1,6 @@
 /** OAuth protocol primitives. The caller owns redirects, CSRF state validation,
  * storage, access control, and token lifecycle. No account state lives here. */
-export type OAuthProvider='youtube'|'twitch';
+export type OAuthProvider='youtube'|'twitch'|'kick';
 export type OAuthFetcher=typeof fetch;
 export interface OAuthClient {provider:OAuthProvider;clientId:string;clientSecret?:string;redirectUri:string;}
 export interface OAuthTokens {accessToken:string;refreshToken?:string;expiresIn?:number;tokenType:string;scopes:string[];}
@@ -11,6 +11,7 @@ export interface OAuthRefreshOptions extends Omit<OAuthClient,'redirectUri'> {re
 const endpoints={
  youtube:{authorize:'https://accounts.google.com/o/oauth2/v2/auth',token:'https://oauth2.googleapis.com/token'},
  twitch:{authorize:'https://id.twitch.tv/oauth2/authorize',token:'https://id.twitch.tv/oauth2/token'},
+ kick:{authorize:'https://id.kick.com/oauth/authorize',token:'https://id.kick.com/oauth/token'},
 } as const;
 const secureRandom=(size:number):string=>{
  const bytes=new Uint8Array(size);crypto.getRandomValues(bytes);
@@ -33,12 +34,12 @@ export async function beginOAuth(options:OAuthBeginOptions):Promise<{url:string;
  if(!options.scopes.length)throw new Error('OAuth scopes required');
  url.searchParams.set('scope',options.scopes.join(' '));
  url.searchParams.set('state',state);
- if(options.provider==='youtube'){
+ if(options.provider==='youtube'||options.provider==='kick'){
   const verifier=secureRandom(32);
   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier));
   url.searchParams.set('code_challenge',toBase64Url(new Uint8Array(digest)));
   url.searchParams.set('code_challenge_method','S256');
-  url.searchParams.set('access_type','offline');
+  if(options.provider==='youtube')url.searchParams.set('access_type','offline');
   return {url:url.toString(),state,codeVerifier:verifier};
  }
  return {url:url.toString(),state};
@@ -59,18 +60,27 @@ async function tokenRequest(provider:OAuthProvider,params:URLSearchParams,fetche
     typeof item.scope==='string'?item.scope.split(' ').filter(Boolean):[],
  };
 }
-export function exchangeOAuthCode(options:OAuthTokenOptions):Promise<OAuthTokens>{
+export async function exchangeOAuthCode(options:OAuthTokenOptions):Promise<OAuthTokens>{
  const params=new URLSearchParams({grant_type:'authorization_code',client_id:required(options.clientId,'clientId'),
   code:required(options.code,'code'),redirect_uri:required(options.redirectUri,'redirectUri')});
  if(options.clientSecret)params.set('client_secret',options.clientSecret);
- if(options.provider==='twitch'&&!options.clientSecret)throw new Error('Twitch authorization code exchange requires clientSecret');
- if(options.provider==='youtube'&&options.codeVerifier)params.set('code_verifier',options.codeVerifier);
+ if((options.provider==='twitch'||options.provider==='kick')&&!options.clientSecret)
+  throw new Error(options.provider+' authorization code exchange requires clientSecret');
+ if(options.provider==='kick'&&!options.codeVerifier)throw new Error('Kick code verifier required');
+ if(options.codeVerifier)params.set('code_verifier',options.codeVerifier);
  return tokenRequest(options.provider,params,options.fetcher??fetch,options.signal);
 }
 export function refreshOAuthToken(options:OAuthRefreshOptions):Promise<OAuthTokens>{
  const params=new URLSearchParams({grant_type:'refresh_token',client_id:required(options.clientId,'clientId'),
   refresh_token:required(options.refreshToken,'refreshToken')});
  if(options.clientSecret)params.set('client_secret',options.clientSecret);
- if(options.provider==='twitch'&&!options.clientSecret)throw new Error('Twitch token refresh requires clientSecret');
+ if((options.provider==='twitch'||options.provider==='kick')&&!options.clientSecret)throw new Error(options.provider+' token refresh requires clientSecret');
  return tokenRequest(options.provider,params,options.fetcher??fetch,options.signal);
+}
+
+/** Official Kick server-to-server token. Never expose this token to browsers. */
+export function getKickAppAccessToken(options:{clientId:string;clientSecret:string;fetcher?:OAuthFetcher;signal?:AbortSignal}):Promise<OAuthTokens>{
+ const params=new URLSearchParams({grant_type:'client_credentials',
+  client_id:required(options.clientId,'clientId'),client_secret:required(options.clientSecret,'clientSecret')});
+ return tokenRequest('kick',params,options.fetcher??fetch,options.signal);
 }

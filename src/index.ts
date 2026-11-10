@@ -355,5 +355,5 @@ export type {
   YouTubeSuperStickerDetails,
 } from './platforms/youtube/types';
 
-export {beginOAuth,exchangeOAuthCode,refreshOAuthToken} from './auth/oauth';
+export {beginOAuth,exchangeOAuthCode,refreshOAuthToken,getKickAppAccessToken} from './auth/oauth';
 export type {OAuthProvider,OAuthClient,OAuthBeginOptions,OAuthTokenOptions,OAuthRefreshOptions,OAuthTokens,OAuthFetcher} from './auth/oauth';
