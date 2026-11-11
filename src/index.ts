@@ -98,7 +98,8 @@ export {
 export { clearSevenTvPaintV4Cache, fetchSevenTvPaintV4Detailed } from './identity/sevenTvV4';
 export { fetchJson, fetchWithTimeout, isAbortError } from './network/fetch';
 export { resolveTwitchUserId } from './emotes/twitch';
-export { clearTwitchAvatarCache, fetchTwitchUserAvatar } from './identity/twitchAvatar';
+export { clearTwitchAvatarCache, fetchTwitchUserAvatar, fetchTwitchUserIdentity } from './identity/twitchAvatar';
+export type { TwitchPublicIdentity } from './identity/twitchAvatar';
 export { clearKickAvatarCache, fetchKickUserAvatar } from './identity/kickAvatar';
 export {
   fetchChannelSevenTv,

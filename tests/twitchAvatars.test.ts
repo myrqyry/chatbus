@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearTwitchAvatarCache, fetchTwitchUserAvatar } from '../src/index';
+import { clearTwitchAvatarCache, fetchTwitchUserAvatar, fetchTwitchUserIdentity } from '../src/index';
 
 const avatar = 'https://static-cdn.jtvnw.net/jtv_user_pictures/example-profile_image-600x600.png';
 
@@ -14,6 +14,27 @@ describe('Twitch profile pictures for chat identity badges', () => {
     expect(await fetchTwitchUserAvatar('caster')).toBe(avatar);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(String(fetcher.mock.calls[0]?.[0])).toContain('login=caster');
+  });
+
+  it('returns the real streamer chat color from the same public profile lookup',async()=>{
+    const fetcher=vi.fn(async()=>new Response(JSON.stringify([{
+      login:'caster',logo:avatar,chatColor:'#68BE62'
+    }]),{status:200}));
+    vi.stubGlobal('fetch',fetcher);
+    const [profile,portrait]=await Promise.all([
+      fetchTwitchUserIdentity('Caster'),fetchTwitchUserAvatar('caster'),
+    ]);
+    expect(profile).toEqual({avatarUrl:avatar,chatColor:'#68BE62'});
+    expect(portrait).toBe(avatar);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not accept untrusted or malformed chat color values',async()=>{
+    vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify([{
+      logo:avatar,chatColor:'red; background: url(evil)'
+    }]),{status:200})));
+    expect(await fetchTwitchUserIdentity('caster'))
+      .toEqual({avatarUrl:avatar,chatColor:null});
   });
 
   it('coalesces simultaneous requests for the same user', async () => {

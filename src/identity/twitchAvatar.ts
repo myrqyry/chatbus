@@ -10,8 +10,13 @@ const FAILURE_TTL_MS = 60_000;
 const MAX_CACHE_ENTRIES = 256;
 const VALID_LOGIN = /^[a-z0-9_]{1,25}$/;
 
-const cache = new Map<string, { value: string | null; expiresAt: number }>();
-const pending = new Map<string, Promise<string | null>>();
+export interface TwitchPublicIdentity {
+  avatarUrl: string | null;
+  /** Twitch's own selected chat-name color, not the current viewer's color. */
+  chatColor: string | null;
+}
+const cache = new Map<string, { value: TwitchPublicIdentity | null; expiresAt: number }>();
+const pending = new Map<string, Promise<TwitchPublicIdentity | null>>();
 
 function safeAvatarUrl(value: unknown): string | null {
   if (typeof value !== 'string' || value.length > 2048) return null;
@@ -33,8 +38,10 @@ export function clearTwitchAvatarCache(login?: string): void {
   else cache.clear();
 }
 
-/** Fetch only the public image URL, never download artwork or expose credentials. */
-export function fetchTwitchUserAvatar(login: string): Promise<string | null> {
+/** Load public artwork and owner chat color from one bounded, cached lookup.
+ * No default is invented when a user never selected a Twitch chat color.
+ */
+export function fetchTwitchUserIdentity(login: string): Promise<TwitchPublicIdentity | null> {
   const key = login.trim().toLowerCase();
   if (!VALID_LOGIN.test(key)) return Promise.resolve(null);
   const cached = cache.get(key);
@@ -47,14 +54,20 @@ export function fetchTwitchUserAvatar(login: string): Promise<string | null> {
       if (!Array.isArray(response)) return null;
       const row = response[0];
       if (!row || typeof row !== 'object') return null;
-      return safeAvatarUrl((row as Record<string, unknown>).logo);
+      const details = row as Record<string, unknown>;
+      const rawColor = details.chatColor;
+      return {
+        avatarUrl: safeAvatarUrl(details.logo),
+        chatColor: typeof rawColor === 'string' && /^#[0-9a-f]{6}$/i.test(rawColor)
+          ? rawColor : null,
+      };
     })
     .catch(() => null)
     .then(value => {
       cache.delete(key);
       cache.set(key, {
         value,
-        expiresAt: Date.now() + (value ? SUCCESS_TTL_MS : FAILURE_TTL_MS),
+        expiresAt: Date.now() + (value?.avatarUrl ? SUCCESS_TTL_MS : FAILURE_TTL_MS),
       });
       while (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
       return value;
@@ -62,4 +75,9 @@ export function fetchTwitchUserAvatar(login: string): Promise<string | null> {
     .finally(() => { pending.delete(key); });
   pending.set(key, task);
   return task;
+}
+
+/** Backwards-compatible image-only API, sharing the exact same lookup/cache. */
+export function fetchTwitchUserAvatar(login: string): Promise<string | null> {
+  return fetchTwitchUserIdentity(login).then(identity => identity?.avatarUrl ?? null);
 }
