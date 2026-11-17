@@ -34,7 +34,7 @@ web-client channel/chatroom IDs. Supports identified senders with valid
 positive numeric IDs in chat.message.sent v1; other event types and
 anonymous/unsupported sender shapes are deliberately not qualified.
 
-## Host responsibilities and integration requirements
+## Host requirements, not implemented here
 
 - Register the app and webhook using Kick's public API and the appropriate
   authorization; existing Chatbus OAuth utilities remain the token owner
@@ -45,13 +45,13 @@ anonymous/unsupported sender shapes are deliberately not qualified.
 - Limit the request stream before allocating the body. The helper's 256 KiB
   limit is only defense in depth. Cache and refresh Kick's public key;
   retry verification with a legitimately refreshed key when appropriate.
-- The verifier alone is stateless. The optional receiver below checks
-  freshness and requires an atomic durable recording callback. A host
-  must choose a retention/freshness policy compatible with Kick retries.
-- Authenticate and authorize each relay client at the host boundary.
-  Receiver target allowlisting and the existing same-origin upgrade check
-  do not replace session authorization. Public HTTPS callback routing,
-  storage and client authentication still need a production host.
+- Enforce timestamp freshness and durably deduplicate delivery IDs before
+  fanout (the helper is stateless and intentionally does not claim replay
+  protection). A host must choose a policy compatible with Kick retries.
+- Deliver normalized events to authorized clients using a supported
+  transport. Existing Chatbus relay remains available but does not yet
+  consume webhook deliveries. A public HTTPS callback and client fanout
+  need a host design; no service, subscription or cost authorized here.
 
 Noita remains on its previous pinned Chatbus revision. No attempt to
 subscribe to a live channel, change account settings or provision hosting.
@@ -69,66 +69,3 @@ native-emote/reply/user normalization, and reject modified bytes/timestamps,
 missing signatures, wrong subscriptions/broadcasters/versions and invalid
 signed payloads. Provider HTTP is fixture-controlled except for the
 separate live public-key shape check.
-
-
-## Local webhook-to-relay receiver — next checkpoint
-
-`createKickWebhookReceiver`, exported from the same Node-only server entry,
-takes host-owned subscription/broadcaster/target mappings, a trusted public
-key supplier, and a required asynchronous atomic durable recordDelivery
-callback. The callback persists verified deliveries and returns true only
-for a newly inserted ID; duplicates return false. No in-memory dedupe
-is substituted for durable storage. The receiver checks a configurable
-timestamp window (local defaults: 5 minutes old, 30 seconds future skew),
-limits streaming bodies to 256 KiB before key lookup and parsing, and
-dispatches only after the recording callback succeeds.
-
-The existing attachChatbusRelayServer connector seam can route an authorized
-Kick target to receiver.connect(target, callbacks). All non-webhook
-connections continue to use their existing host-owned route. The receiver
-does not alter the wire protocol. Its connected state means a local
-listener was attached to a configured subscription, not confirmation of a
-live upstream registration or Kick delivery. A host must check the actual
-subscription state independently.
-
-Status: 204 for accepted or duplicate deliveries; 401 for invalid signatures,
-unknown/mismatched registration or freshness failure; 413 for excessive
-body size; 503 for key/storage failure or closed receiver. Host body/time
-limits and authentication are still required. Storage must retain delivery
-IDs for the full accepted replay window, including restarts. The local
-test uses a temporary SQLite journal with a unique primary key and actual
-persisted event JSON; no production storage schema or retention policy
-was imposed. A committed delivery followed by a process crash or listener
-failure may not reach clients: this is deduplicated best-effort live fanout,
-not exactly-once delivery or a durable outbox/ack protocol. Callback
-consumers are trusted server code. No key caching, subscription renewal,
-rate limiter, public route, or credentials were configured.
-
-Verification:
-```sh
-pnpm exec vitest run tests/kickWebhookRelay.test.ts
-pnpm typecheck
-pnpm test
-```
-
-Four focused cases pass. With generated RSA keys, real HTTP streaming
-requests and actual loopback WebSocket relay/client sessions, two clients
-for alpha received one normalized native-emote event each from concurrent
-duplicate requests, while beta received only its own event. SQLite was
-closed/reopened and the receiver recreated; retransmission remained
-suppressed. This tests persistent storage reopening, not an OS crash.
-Tampering, mismatched broadcaster, unknown registration, timestamp limits,
-oversized and chunked streams, unavailable storage, faulty client callbacks
-and shutdown during durable recording also passed. Full suite: 249 tests
-across 42 files, TypeScript passed. No extra dependencies (SQLite used
-only in Node 24 integration tests).
-
-Existing infrastructure inspection: Sketchy has a loopback Vite dev/preview
-relay, not a public webhook host; its Vercel config is static output.
-Noita has its local blocked migration (87f4722), and chatbus-bot is a local
-CLI consumer. No consumer changed or live subscriptions registered. Next
-acceptance step is to identify an authorized public HTTPS host and register
-the actual broadcaster subscription; qualify real Kick delivery through
-that host and Noita, including authorization, durable storage, and social
-events beyond chat.message.sent. Do not assume a Vercel rewrite is a
-persistent WebSocket host.

@@ -490,9 +490,8 @@ remains Kick's web realtime API. See
 For official event delivery, the Node-only `@myrqyry/chatbus/server`
 entry also provides signed `chat.message.sent` verification and normalization.
 See [official webhook intake](docs/kick-official-webhooks.md) for its exact
-security and host responsibilities. The receiver now supports durable
-deduplication via host storage and local fanout using the existing relay.
-Live registration, public hosting and consumer qualification remain open.
+security and host responsibilities. Live registration and fanout are not yet
+implemented.
 
 
 ## Precedence
