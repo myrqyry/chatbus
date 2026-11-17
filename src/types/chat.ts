@@ -1,7 +1,7 @@
 import type { Emote, EmoteSet } from './emotes';
 import type { Badge, BadgeRef, NamePaint } from './identity';
 
-export type ChatPlatform = 'twitch' | 'kick' | 'youtube' | 'custom';
+export type ChatPlatform = 'twitch' | 'kick' | 'youtube' | 'tiktok' | 'custom';
 export type ChatEventOrigin = 'live' | 'replay' | 'test';
 export type ChatConnectionState = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 

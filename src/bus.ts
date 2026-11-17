@@ -5,6 +5,7 @@ import { connectTwitchChat } from './platforms/twitch/connect';
 import type { TwitchConnectOptions } from './platforms/twitch/types';
 import { connectYouTubeChat } from './platforms/youtube/connect';
 import type { YouTubeConnectOptions } from './platforms/youtube/types';
+import { connectTikTokChat, normalizeTikTokChannel, type TikTokConnectOptions } from './platforms/tiktok';
 
 export interface ChatBusConnectionState {
   id: string;
@@ -32,7 +33,8 @@ type ManagedYouTubeOptions = Omit<YouTubeConnectOptions, 'onEvent' | 'onStateCha
 export type ChatBusConnectionSpec =
   | { id?: string; platform: 'twitch'; options: ManagedTwitchOptions }
   | { id?: string; platform: 'kick'; options: ManagedKickOptions }
-  | { id?: string; platform: 'youtube'; options: ManagedYouTubeOptions };
+  | { id?: string; platform: 'youtube'; options: ManagedYouTubeOptions }
+  | { id?: string; platform: 'tiktok'; options: Omit<TikTokConnectOptions, 'onEvent' | 'onStateChange' | 'onError'> };
 
 export interface ChatBusConnectionHandle {
   id: string;
@@ -52,6 +54,7 @@ const targetFor = (spec: ChatBusConnectionSpec): string => {
   if (spec.platform === 'youtube') {
     return spec.options.videoId?.trim() || spec.options.liveChatId?.trim() || 'youtube';
   }
+  if (spec.platform === 'tiktok') return normalizeTikTokChannel(spec.options.channel);
   return spec.options.channel.trim();
 };
 
@@ -102,6 +105,9 @@ export function createChatBus(options: ChatBusOptions): ChatBus {
           onStateChange,
           onError,
         });
+        closeConnection = connection.close;
+      } else if (spec.platform === 'tiktok') {
+        const connection = connectTikTokChat({...spec.options, onEvent: options.onEvent, onStateChange, onError});
         closeConnection = connection.close;
       } else {
         const connection = await connectYouTubeChat({

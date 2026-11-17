@@ -17,4 +17,11 @@ describe('Chatbus relay protocol',()=>{
       JSON.stringify({type:'wat'}),
     ]) expect(()=>parseRelayCommand(input)).toThrow();
   });
+
+  it('carries TikTok targets through the existing relay protocol without credentials',()=>{
+    expect(parseRelayCommand(JSON.stringify({type:'connect',protocol:1,platform:'tiktok',target:'@creator',apiKey:'not forwarded'}))).toEqual({
+      type:'connect',protocol:1,platform:'tiktok',target:'@creator',
+    });
+  });
+
 });

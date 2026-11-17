@@ -32,6 +32,7 @@ const CHAT_PLATFORMS: ReadonlySet<string> = new Set<ChatPlatform>([
   'twitch',
   'kick',
   'youtube',
+  'tiktok',
   'custom',
 ]);
 

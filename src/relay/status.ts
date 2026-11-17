@@ -1,4 +1,4 @@
-import { RELAY_PROTOCOL_VERSION, type RelayPlatform } from './protocol';
+import { RELAY_PROTOCOL_VERSION, isRelayPlatform, type RelayPlatform } from './protocol';
 
 export interface LocalChatbusRelayStatus {
   available: boolean;
@@ -9,8 +9,6 @@ export interface LocalChatbusRelayStatus {
 const unavailable = (): LocalChatbusRelayStatus => ({
   available: false, protocol: RELAY_PROTOCOL_VERSION, platforms: [],
 });
-const isPlatform = (value: unknown): value is RelayPlatform =>
-  value === 'twitch' || value === 'kick' || value === 'youtube';
 const abortError = () => new DOMException('The operation was aborted.', 'AbortError');
 
 /** Discover the same-origin relay, not upstream provider readiness. */
@@ -33,7 +31,7 @@ export async function getLocalChatbusRelayStatus(
         body.protocol !== RELAY_PROTOCOL_VERSION || !Array.isArray(body.platforms)) {
       return unavailable();
     }
-    return { available: true, protocol: RELAY_PROTOCOL_VERSION, platforms: [...new Set(body.platforms.filter(isPlatform))] };
+    return { available: true, protocol: RELAY_PROTOCOL_VERSION, platforms: [...new Set(body.platforms.filter(isRelayPlatform))] };
   } catch {
     return unavailable();
   } finally {

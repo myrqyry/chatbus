@@ -358,3 +358,6 @@ export type {
 
 export {beginOAuth,exchangeOAuthCode,refreshOAuthToken,getKickAppAccessToken} from './auth/oauth';
 export type {OAuthProvider,OAuthClient,OAuthBeginOptions,OAuthTokenOptions,OAuthRefreshOptions,OAuthTokens,OAuthFetcher} from './auth/oauth';
+
+export { connectTikTokChat, createTikTokLiveDriver, normalizeTikTokChannel, normalizeTikTokEvent } from './platforms/tiktok';
+export type { TikTokConnectOptions, TikTokConnection, TikTokDriver, TikTokNormalizeContext } from './platforms/tiktok';

@@ -4,7 +4,7 @@
 
 `@myrqyry/chatbus` is a framework-neutral livestream social substrate shared by
 stream overlays and suitable for desktop/agent consumers. It owns
-Twitch, Kick, and YouTube Live transports; native and third-party emote discovery;
+Twitch, Kick, YouTube Live, and opt-in Node-hosted TikTok LIVE transports; native and third-party emote discovery;
 message fragments; identity metadata; normalized social events; platform
 connection lifecycle; live provider and entitlement state; capability planning;
 deterministic test/replay utilities; and bounded chat timeline state while
@@ -560,3 +560,35 @@ platform-specific write/send/reply APIs without forcing privileged concerns into
 read-only overlay consumers.
 
 **7TV name-paint wire contract:** see [docs/seventv-name-paints.md](docs/seventv-name-paints.md) for the separate v3/v4 cosmetics adapters, signed ARGB, layered paints and their shared normalized data contract.
+
+## TikTok LIVE (opt-in Node host)
+
+Install the tested read-only connector in the host application, not in a
+browser source:
+
+```sh
+pnpm add -E tiktok-live-connector@2.4.0
+```
+
+```ts
+import { createChatBus } from '@myrqyry/chatbus';
+
+const bus = createChatBus({
+  onEvent: event => console.log(event.type, event.message?.text),
+  onConnectionStateChange: state => console.log(state.state),
+  onError: error => console.error(error.message),
+});
+const connection = await bus.connect({
+  platform: 'tiktok',
+  options: { channel: '@creator' },
+});
+// Later: connection.close();
+```
+
+Readiness comes from the connected state, not from allocating a handle.
+TikTok is accepted by the generic Chatbus relay when its host explicitly
+allows that provider. The existing Kick-only local relay remains Kick-only.
+Anonymous chat reception was live-verified, including actual relay-driven
+upstream disconnect. The transport is unofficial and depends on external
+signing availability. See [TikTok LIVE integration](docs/tiktok-live.md)
+for version, configuration, event coverage, and verification boundaries.

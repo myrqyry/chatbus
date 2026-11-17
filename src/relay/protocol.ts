@@ -1,7 +1,7 @@
 import type { ChatConnectionState, ChatEvent } from '../types/chat';
 
 export const RELAY_PROTOCOL_VERSION = 1 as const;
-export type RelayPlatform = 'twitch' | 'kick' | 'youtube';
+export type RelayPlatform = 'twitch' | 'kick' | 'youtube' | 'tiktok';
 
 export interface RelayConnectRequest {
   platform: RelayPlatform;
@@ -19,15 +19,15 @@ export type RelayServerPacket =
   | { type: 'event'; event: ChatEvent }
   | { type: 'error'; message: string };
 
-const isPlatform = (value: unknown): value is RelayPlatform =>
-  value === 'twitch' || value === 'kick' || value === 'youtube';
+export const isRelayPlatform = (value: unknown): value is RelayPlatform =>
+  value === 'twitch' || value === 'kick' || value === 'youtube' || value === 'tiktok';
 
 export function parseRelayCommand(input: string): RelayConnectCommand {
   let value: unknown;
   try { value = JSON.parse(input); } catch { throw new Error('Malformed relay command'); }
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid relay command');
   const record = value as Record<string, unknown>;
-  if (record.type !== 'connect' || !isPlatform(record.platform) || typeof record.target !== 'string') {
+  if (record.type !== 'connect' || !isRelayPlatform(record.platform) || typeof record.target !== 'string') {
     throw new Error('Invalid relay connect command');
   }
   const target = record.target.trim();

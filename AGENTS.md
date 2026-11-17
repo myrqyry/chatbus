@@ -3,7 +3,7 @@
 Framework-neutral livestream chat substrate (emotes, fragments, normalized events, connection lifecycle, timeline, replay). Apps own rendering.
 
 - Single package. Main entry: `src/index.ts` (`main`/`types`/`exports["."]`). Optional isolated exports: `./streamlabs` for the native-WebSocket Engine.IO v3 adapter, `./relay` for the browser-safe Chatbus relay client/protocol, and `./server` for the Node-only same-origin WebSocket relay adapter. No workspaces.
-- `src/`: `emotes/`, `identity/`, `messages/`, `network/`, `platforms/kick/`, `platforms/twitch/`, `platforms/youtube/`, `platforms/streamlabs/`, `seventv/`, `testing/`, `types/`, `bus.ts`, `timeline.ts`. `tests/`: Vitest files, no vitest config.
+- `src/`: `emotes/`, `identity/`, `messages/`, `network/`, `platforms/kick/`, `platforms/twitch/`, `platforms/youtube/`, `platforms/tiktok/`, `platforms/streamlabs/`, `seventv/`, `testing/`, `types/`, `bus.ts`, `timeline.ts`. `tests/`: Vitest files, no vitest config.
 - Contracts live in `docs/`: `emote-precedence-and-assets.md`, `seventv-personal-entitlements.md`, `chat-timeline-and-hype-train.md`, `twitch-capabilities-and-replay.md`, `youtube-live-chat.md`. Trust them + code over `README` examples.
 
 ## Commands (repo root)
@@ -41,3 +41,4 @@ Noita/Sketchy overlays pin Git commits of this repo. Advance their pins delibera
 - `src/platforms/youtube/AGENTS.md` — YouTube polling, mutable-event dedupe
 - `src/seventv/AGENTS.md` — live updates, entitlements
 - `src/platforms/streamlabs/AGENTS.md` — opt-in read-only Socket.IO v2 wire transport, protocol regression cases
+- `src/platforms/tiktok/AGENTS.md` — read-only Node driver, signing limits, decoded v3 payloads, cancellation and native-emote boundaries.
