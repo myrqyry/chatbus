@@ -1,4 +1,4 @@
-import type { IncomingMessage, Server as HttpServer } from 'node:http';
+import type { IncomingMessage, ServerResponse, Server as HttpServer } from 'node:http';
 import type { Duplex } from 'node:stream';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createChatBus, type ChatBusConnectionSpec } from '../bus';
@@ -21,6 +21,7 @@ type RelayConnector = (spec: ChatBusConnectionSpec, callbacks: RelayCallbacks) =
 export interface ChatbusRelayServerOptions {
   server: HttpServer;
   path?: string;
+  authorizeUpgrade?: (request: IncomingMessage) => boolean;
   resolveConnection(request: RelayConnectRequest): ChatBusConnectionSpec | Promise<ChatBusConnectionSpec>;
   /** Test/host seam. Normal callers should let the relay use createChatBus(). */
   connect?: RelayConnector;
@@ -108,7 +109,7 @@ export function attachChatbusRelayServer(options: ChatbusRelayServerOptions): Ch
   const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
     if (pathname !== relayPath) return;
-    if (!sameOrigin(req)) { rejectUpgrade(socket); return; }
+    if (!sameOrigin(req) || (options.authorizeUpgrade && !options.authorizeUpgrade(req))) { rejectUpgrade(socket); return; }
     wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
   };
   options.server.on('upgrade', onUpgrade);
@@ -121,5 +122,62 @@ export function attachChatbusRelayServer(options: ChatbusRelayServerOptions): Ch
       for (const [socket, dispose] of sessions) { dispose(); socket.terminate(); }
       wss.close();
     },
+  };
+}
+
+/** Shared settings for the local anonymous Kick relay. Presentation apps choose
+ * whether historical messages should seed their view or only receive live chat. */
+export function resolveLocalKickRelayConnection(request: RelayConnectRequest, history: boolean): ChatBusConnectionSpec {
+  if (request.platform !== 'kick') throw new Error('Platform not enabled on the local Kick relay');
+  const channel = request.target.trim();
+  if (!/^[a-z0-9_-]{1,100}$/i.test(channel)) throw new Error('Invalid Kick relay target');
+  return { platform: 'kick', options: {
+    channel, emitInitialHistory: history, ...(history ? { initialHistoryLimit: 20 } : {}),
+  } };
+}
+
+function isLoopbackRequest(request: IncomingMessage): boolean {
+  const address = request.socket.remoteAddress;
+  if (address !== '127.0.0.1' && address !== '::1' && address !== '::ffff:127.0.0.1') return false;
+  if (!request.headers.host) return false;
+  try {
+    const url = new URL('http://' + request.headers.host);
+    return !url.username && !url.password && url.pathname === '/' && !url.search && !url.hash &&
+      ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+  } catch { return false; }
+}
+
+export interface LocalKickRelayOptions {
+  server: HttpServer;
+  emitInitialHistory: boolean;
+  connect?: RelayConnector;
+}
+
+/** Mount on an existing local HTTP server. No additional service or port.
+ * Reverse proxies must not forward the local control routes publicly. */
+export function attachLocalKickRelay(options: LocalKickRelayOptions) {
+  const relay = attachChatbusRelayServer({
+    server: options.server,
+    authorizeUpgrade: isLoopbackRequest,
+    resolveConnection: request => resolveLocalKickRelayConnection(request, options.emitInitialHistory),
+    connect: options.connect,
+  });
+  let closed = false;
+  return {
+    handleStatus(request: IncomingMessage, response: ServerResponse): boolean {
+      if (request.url?.split('?')[0] !== '/api/chatbus/status') return false;
+      const available = !closed && isLoopbackRequest(request);
+      const status = !available ? 404 : request.method !== 'GET' ? 405 : 200;
+      response.writeHead(status, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      response.end(JSON.stringify(status === 200
+        ? { available: true, mode: 'local', protocol: RELAY_PROTOCOL_VERSION, platforms: ['kick'] }
+        : { available: false }));
+      return true;
+    },
+    close() { if (!closed) { closed = true; relay.close(); } },
   };
 }

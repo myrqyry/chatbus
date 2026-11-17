@@ -487,6 +487,18 @@ grant access to a rejected WebSocket, or provision a relay. The default
 remains Kick's web realtime API. See
 [relay lifecycle and Kick integration evidence](docs/relay-lifecycle-2026-11-17.md).
 
+For browser overlays running on their existing local HTTP server, the
+shared `attachLocalKickRelay()` (Node-only server export) mounts the
+anonymous Kick transport and serves a same-origin capability response via
+`handleStatus(req, res)`. The browser-safe `getLocalChatbusRelayStatus()`
+discovers it with bounded, abortable HTTP discovery. If available, use
+`connectChatbusRelay()`; otherwise the application may retain its direct
+browser connector. The status response is capability discovery, not a
+provider connection receipt. Local host/peer and same-origin upgrade
+checks are required; do not publicly proxy local control routes.
+See [consumer unification](docs/local-kick-relay.md).
+
+
 
 ## Precedence
 

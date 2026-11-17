@@ -23,7 +23,5 @@ that ignores cancellation will settle immediately.
 
 Verification: pnpm typecheck; 16/16 focused tests; 241/241 full tests
 across 40 files. No wire protocol or dependency changes. Actual Kick
-authorization, live message delivery, Noita consumer pin update,
-deployed transport and OBS rendering remain open. Investigate supported
-provider access (including official event authorization), not spoofed
-origins or bypassing a rejected handshake. No persistent relay provisioned.
+authorization, live message delivery, Noita consumer snapshot update,
+deployed transport and OBS rendering remain open. The later shared local relay work is recorded in local-kick-relay.md; the webhook experiment was reverted. No persistent relay provisioned.

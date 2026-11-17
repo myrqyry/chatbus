@@ -9,3 +9,4 @@ The relay is the optional cross-runtime wire adapter around Chatbus provider tra
 - Reject cross-origin browser upgrades. Keep payload bounds small and never accept arbitrary executable/config objects over the wire.
 - Relay normalized `ChatEvent` objects and connection state without re-parsing provider payloads. Chatbus remains the provider normalization authority.
 - A browser abort before open rejects the client promise; closed clients ignore late packets. Server sessions own their socket and any eventual provider handle. After asynchronous host resolution or provider connection, recheck the session; close late handles. Shutdown closes active sockets and detaches the upgrade handler.
+- Local browser hosts share attachLocalKickRelay, handleStatus and getLocalChatbusRelayStatus. Keep local peer/host and same-origin checks; status is capability metadata, not upstream readiness. History is a caller policy (chat views may seed, particle emitters should not).
