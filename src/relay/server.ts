@@ -123,3 +123,6 @@ export function attachChatbusRelayServer(options: ChatbusRelayServerOptions): Ch
     },
   };
 }
+
+export { fetchKickWebhookPublicKey, verifyKickChatWebhook } from '../platforms/kick/webhook';
+export type { KickChatWebhookInput, VerifiedKickChatDelivery } from '../platforms/kick/webhook';
