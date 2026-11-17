@@ -210,6 +210,32 @@ describe('Kick socket lifecycle', () => {
     vi.unstubAllGlobals();
   });
 
+  it('uses a host-supplied negotiation base for initial and refresh requests',async()=>{
+    const base='/api/kick-realtime';
+    fetcher.mockImplementation(async(input:string|URL|Request)=>{
+      const url=String(input);
+      if(!url.startsWith(base+'/'))throw Error('Unexpected URL '+url);
+      return new Response(JSON.stringify(url.endsWith('/auth/connection')
+        ? {data:{token:'guest-token'}}
+        : {data:{connections:[{provider:'centrifugo',credentials:{url:endpoint}}]}}),{status:200});
+    });
+    const handle=createKickSocket(42,{channelId:'99',realtimeBaseUrl:base+'/'});
+    try{
+      await vi.waitFor(()=>expect(MockWebSocket.instances).toHaveLength(1));
+      const ws=MockWebSocket.instances[0]!;
+      expect(ws.url).toBe(endpoint);
+      ws.emitOpen();
+      const connect=JSON.parse(ws.sent[0]!);
+      ws.emitMessage(JSON.stringify({id:connect.id,connect:{expires:true,ttl:20,ping:25}}));
+      for(const frame of ws.sent.slice(1).map(entry=>JSON.parse(entry)))ws.emitMessage(JSON.stringify({id:frame.id,subscribe:{}}));
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(fetcher.mock.calls.map(args=>String(args[0]))).toEqual([
+        base+'/connection',base+'/channels/99/chat/connection',base+'/auth/connection',base+'/auth/connection',
+      ]);
+      expect(JSON.parse(ws.sent.at(-1)!)).toMatchObject({refresh:{token:'guest-token'}});
+    }finally{handle.close();}
+  });
+
   it('negotiates Centrifugo, authenticates, subscribes all current Kick chat feeds, and only then reports connected', async () => {
     const states:string[]=[];
     const handle=createKickSocket(42,{channelId:'99',onStateChange:s=>states.push(s)});

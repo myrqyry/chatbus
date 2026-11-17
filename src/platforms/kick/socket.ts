@@ -1,8 +1,7 @@
 import { fetchJson } from '../../network/fetch';
 import type { KickSocketHandle, KickSocketOptions } from './types';
 
-const REALTIME_CONNECTION_URL='https://web.kick.com/api/v1/realtime/connection';
-const REALTIME_AUTH_URL='https://web.kick.com/api/v1/realtime/auth/connection';
+const REALTIME_BASE_URL='https://web.kick.com/api/v1/realtime';
 const PUSHER_VERSION='protocol=7&client=js&version=8.4.0&flash=false';
 const DEFAULT_INACTIVITY_TIMEOUT_MS=90_000;
 const WATCHDOG_INTERVAL_MS=5_000;
@@ -90,6 +89,9 @@ export function createKickSocket(
 ):KickSocketHandle{
   if(!Number.isInteger(chatroomId)||chatroomId<=0)throw new Error('Kick chatroom id must be a positive integer');
 
+  const realtimeBase=(options.realtimeBaseUrl??REALTIME_BASE_URL).replace(/\/$/u,'');
+  const connectionUrl=realtimeBase+'/connection';
+  const authUrl=realtimeBase+'/auth/connection';
   let socket:WebSocket|null=null;
   let stopped=false;
   let generation=0;
@@ -137,7 +139,7 @@ export function createKickSocket(
       refreshTimer=null;
       void (async()=>{
         try{
-          const result=await postJson<unknown>(REALTIME_AUTH_URL,{client_id:clientId},requestController?.signal);
+          const result=await postJson<unknown>(authUrl,{client_id:clientId},requestController?.signal);
           if(stopped||currentGeneration!==generation||provider!=='centrifugo')return;
           const token=tokenFrom(result);
           if(!token)throw new Error('Kick realtime refresh token missing');
@@ -313,14 +315,14 @@ export function createKickSocket(
         endpoint={provider:'pusher',url:`${base}/${options.appKey}?${PUSHER_VERSION}`};
       }else{
         const global=await postJson<unknown>(
-          REALTIME_CONNECTION_URL,
+          connectionUrl,
           negotiationBody(clientId),
           controller.signal,
         );
         endpoint=endpointFrom(global);
         if(options.channelId){
           const channel=await postJson<unknown>(
-            `https://web.kick.com/api/v1/realtime/channels/${encodeURIComponent(options.channelId)}/chat/connection`,
+            `${realtimeBase}/channels/${encodeURIComponent(options.channelId)}/chat/connection`,
             negotiationBody(clientId),
             controller.signal,
           );
@@ -332,7 +334,7 @@ export function createKickSocket(
       let token:string|null=null;
       if(endpoint.provider==='centrifugo'){
         const auth=await postJson<unknown>(
-          REALTIME_AUTH_URL,
+          authUrl,
           {client_id:clientId},
           controller.signal,
         );

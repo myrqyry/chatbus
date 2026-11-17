@@ -63,33 +63,46 @@ export function attachChatbusRelayServer(options: ChatbusRelayServerOptions): Ch
   const relayPath = options.path ?? '/api/chatbus/live';
   const connector = options.connect ?? defaultConnect;
   const wss = new WebSocketServer({ noServer: true, clientTracking: false, maxPayload: 16 * 1024 });
-  const active = new Set<RelayConnection>();
+  const sessions = new Map<WebSocket, () => void>();
+  let stopped = false;
 
   wss.on('connection', ws => {
     send(ws, { type: 'ready', protocol: RELAY_PROTOCOL_VERSION });
     let connection: RelayConnection | undefined;
     let connecting = false;
+    let closed = false;
+    const dispose = () => {
+      if (closed) return;
+      closed = true;
+      sessions.delete(ws);
+      const handle = connection;
+      connection = undefined;
+      handle?.close();
+    };
+    sessions.set(ws, dispose);
+    const isCurrent = () => !closed && !stopped && ws.readyState === WebSocket.OPEN;
+    const emit = (packet: RelayServerPacket) => { if (isCurrent()) send(ws, packet); };
     ws.on('message', async raw => {
+      if (!isCurrent()) return;
       if (connection || connecting) { send(ws, { type: 'error', message: 'Relay socket already has a connection' }); return; }
       connecting = true;
       try {
         const command = parseRelayCommand(String(raw));
         const spec = await options.resolveConnection({ platform: command.platform, target: command.target });
-        connection = await connector(spec, {
-          onEvent: event => send(ws, { type: 'event', event }),
-          onStateChange: state => send(ws, { type: 'state', state }),
-          onError: error => send(ws, { type: 'error', message: error.message }),
+        if (!isCurrent()) return;
+        const handle = await connector(spec, {
+          onEvent: event => emit({ type: 'event', event }),
+          onStateChange: state => emit({ type: 'state', state }),
+          onError: error => emit({ type: 'error', message: error.message }),
         });
-        active.add(connection);
+        if (!isCurrent()) { handle.close(); return; }
+        connection = handle;
       } catch (error) {
-        send(ws, { type: 'error', message: error instanceof Error ? error.message : 'Chatbus relay connection failed' });
+        emit({ type: 'error', message: error instanceof Error ? error.message : 'Chatbus relay connection failed' });
       } finally { connecting = false; }
     });
-    ws.on('close', () => {
-      if (!connection) return;
-      connection.close();
-      active.delete(connection);
-    });
+    ws.on('close', dispose);
+    ws.on('error', () => { dispose(); ws.terminate(); });
   });
 
   const onUpgrade = (req: IncomingMessage, socket: Duplex, head: Buffer) => {
@@ -102,9 +115,10 @@ export function attachChatbusRelayServer(options: ChatbusRelayServerOptions): Ch
 
   return {
     close() {
+      if (stopped) return;
+      stopped = true;
       options.server.off('upgrade', onUpgrade);
-      for (const connection of active) connection.close();
-      active.clear();
+      for (const [socket, dispose] of sessions) { dispose(); socket.terminate(); }
       wss.close();
     },
   };

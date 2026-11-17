@@ -32,4 +32,30 @@ describe('Chatbus relay browser client',()=>{
     expect(errors).toEqual(['provider sad']);
     connection.close();
   });
+
+  it('rejects an already aborted connection without opening a socket',async()=>{
+    MockWebSocket.instances=[];
+    const controller=new AbortController();controller.abort();
+    await expect(connectChatbusRelay({
+      platform:'kick',target:'x',baseUrl:'http://localhost:3000',signal:controller.signal,
+      WebSocketImpl:MockWebSocket as unknown as typeof WebSocket,onEvent:vi.fn(),
+    })).rejects.toMatchObject({name:'AbortError'});
+    expect(MockWebSocket.instances).toHaveLength(0);
+  });
+
+  it('settles an aborted handshake and ignores late open and event callbacks',async()=>{
+    MockWebSocket.instances=[];
+    const controller=new AbortController(),onEvent=vi.fn();
+    const pending=connectChatbusRelay({
+      platform:'kick',target:'x',baseUrl:'http://localhost:3000',signal:controller.signal,
+      WebSocketImpl:MockWebSocket as unknown as typeof WebSocket,onEvent,
+    });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({name:'AbortError'});
+    const ws=MockWebSocket.instances[0]!;
+    ws.packet({type:'event',event:{type:'message',platform:'kick',timestamp:1}});
+    expect(ws.sent).toEqual([]);
+    expect(onEvent).not.toHaveBeenCalled();
+  });
+
 });

@@ -133,6 +133,8 @@ export interface KickNormalizeContext {
 export interface KickSocketOptions {
   appKey?: string;
   baseUrl?: string;
+  /** Optional host-provided HTTP negotiation base; the provider still selects the websocket. */
+  realtimeBaseUrl?: string;
   inactivityTimeoutMs?: number;
   channelId?: string;
   additionalChannels?: string[];

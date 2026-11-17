@@ -480,6 +480,14 @@ used by the normalizer. If Kick negotiates Pusher instead, Chatbus builds that
 socket from the returned app key/cluster and preserves the existing
 subscription and reconnect semantics; no retired Pusher key is required.
 
+Hosts that already provide same-origin HTTP routes can set
+`socket.realtimeBaseUrl` for global/channel negotiation and guest-token
+refresh. This does not change the provider-selected WebSocket address,
+grant access to a rejected WebSocket, or provision a relay. The default
+remains Kick's web realtime API. See
+[relay lifecycle and Kick integration evidence](docs/relay-lifecycle-2026-11-17.md).
+
+
 ## Precedence
 
 Provider adapters return scoped candidates. Normal precedence is lexicographic:

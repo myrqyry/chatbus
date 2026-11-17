@@ -57,4 +57,40 @@ describe('Chatbus relay server',()=>{
     });
     expect(result).toBe('403');expect(connect).not.toHaveBeenCalled();relay.close();
   });
+
+  it('releases a provider handle that resolves after the relay client disconnects',async()=>{
+    let finish!: (handle:{close:()=>void})=>void;
+    const close=vi.fn();
+    const connect=vi.fn(()=>new Promise<{close:()=>void}>(resolve=>{finish=resolve;}));
+    const server=createServer();servers.push(server);const port=await listen(server);
+    const relay=attachChatbusRelayServer({server,resolveConnection:()=>({platform:'kick',options:{channel:'x'}}),connect});
+    const ws=new WebSocket(`ws://127.0.0.1:${port}/api/chatbus/live`,{headers:{Origin:`http://127.0.0.1:${port}`}});
+    try{
+      await new Promise<void>((resolve,reject)=>{ws.once('open',()=>resolve());ws.once('error',reject);});
+      ws.send(JSON.stringify({type:'connect',platform:'kick',target:'x'}));
+      await vi.waitFor(()=>expect(connect).toHaveBeenCalledTimes(1));
+      await new Promise<void>(resolve=>{ws.once('close',()=>resolve());ws.close();});
+      finish({close});
+      await vi.waitFor(()=>expect(close).toHaveBeenCalledTimes(1),{timeout:500});
+    }finally{ws.terminate();relay.close();}
+  });
+
+  it('does not start a provider after the relay client leaves during host resolution',async()=>{
+    let finish!: (spec:ChatBusConnectionSpec)=>void;
+    const resolveConnection=vi.fn(()=>new Promise<ChatBusConnectionSpec>(resolve=>{finish=resolve;}));
+    const connect=vi.fn(async()=>({close:vi.fn()}));
+    const server=createServer();servers.push(server);const port=await listen(server);
+    const relay=attachChatbusRelayServer({server,resolveConnection,connect});
+    const ws=new WebSocket(`ws://127.0.0.1:${port}/api/chatbus/live`,{headers:{Origin:`http://127.0.0.1:${port}`}});
+    try{
+      await new Promise<void>((resolve,reject)=>{ws.once('open',()=>resolve());ws.once('error',reject);});
+      ws.send(JSON.stringify({type:'connect',platform:'kick',target:'x'}));
+      await vi.waitFor(()=>expect(resolveConnection).toHaveBeenCalledTimes(1));
+      await new Promise<void>(resolve=>{ws.once('close',()=>resolve());ws.close();});
+      finish({platform:'kick',options:{channel:'x'}});
+      await new Promise(resolve=>setImmediate(resolve));
+      expect(connect).not.toHaveBeenCalled();
+    }finally{ws.terminate();relay.close();}
+  });
+
 });
