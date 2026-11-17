@@ -34,3 +34,7 @@ The local relay tests use actual loopback HTTP and WebSockets, checking
 capability discovery, abort/timeout, history options and nonlocal
 upgrade rejection. Full root verification and consumer receipts are
 recorded with their respective commits.
+
+## Final consumer verification
+
+The exact source snapshot c3c65580e003a20e5ad91a29c580418e2a7e1360 was archived into all three consumers and compared byte-for-byte with their installed packages. Recent history is replay, not live. Real production-preview Chromium: Noita one live / zero replay; Sketchy seven live / 20 replay, both confirmed connected, zero direct browser provider sockets, page errors or CSP violations. Overlay Kit existing local HTTP/WebSocket hub: four live / 20 replay, 24 display messages and social signals. These are finite smoke receipts, not throughput measurements. All four repository test suites passed (245/513/407/527), all typechecks and consumer builds passed; Veyax social/WebSocket contracts 14/14. Sketchy full lint retains existing unrelated errors. No deployment, public webhook, credentials or extra hosting.
