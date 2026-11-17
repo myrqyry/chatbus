@@ -1,6 +1,6 @@
 # Relay lifecycle and Kick integration — 2026-11-17
 
-Noita's existing Kick migration is preserved at local commit 87f4722.
+Historical checkpoint: Noita's intermediate Kick migration is preserved at commit 87f4722. See [shared local transport and final live verification](local-kick-relay.md) for the current setup.
 Local Chromium reached the negotiated Centrifugo endpoint after same-origin
 HTTP negotiation, but the actual provider WebSocket handshake returned 403.
 Do not mistake passing protocol fixtures for successful live chat.
@@ -22,6 +22,4 @@ This does not guarantee a pending host resolver or provider operation
 that ignores cancellation will settle immediately.
 
 Verification: pnpm typecheck; 16/16 focused tests; 241/241 full tests
-across 40 files. No wire protocol or dependency changes. Actual Kick
-authorization, live message delivery, Noita consumer snapshot update,
-deployed transport and OBS rendering remain open. The later shared local relay work is recorded in local-kick-relay.md; the webhook experiment was reverted. No persistent relay provisioned.
+across 40 files. No wire protocol or dependency changes. Live delivery and the consumer snapshot update were subsequently verified across Noita, Sketchy and Overlay Kit. Hosted direct browser connectivity and OBS rendering remain unqualified. The webhook experiment was reverted; no separate relay service was provisioned.
