@@ -64,6 +64,6 @@ export async function fetchKickRecentMessages(
       channelName:channel.channelName,
       channelId:channel.channelId,
     });
-    return event?[event]:[];
+    return event?[{...event,origin:'replay' as const}]:[];
   }).reverse();
 }

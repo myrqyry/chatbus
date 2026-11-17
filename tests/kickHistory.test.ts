@@ -15,6 +15,7 @@ describe('Kick recent chat history',()=>{
   const events=await fetchKickRecentMessages(channel,{limit:20});
   expect(fetcher).toHaveBeenCalledWith('https://kick.com/api/v2/channels/92723/messages',expect.objectContaining({headers:{Accept:'application/json'}}));
   expect(events.map(event=>event.message?.id)).toEqual(['old','new']);
+  expect(events.map(event=>event.origin)).toEqual(['replay','replay']);
   expect(events[0]).toMatchObject({platform:'kick',channelId:'92723',channelName:'nickwhite',message:{text:'older'}});
  });
 

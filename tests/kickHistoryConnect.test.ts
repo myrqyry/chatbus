@@ -62,6 +62,7 @@ describe('Kick initial history + realtime handoff',()=>{
 
     ws.emitMessage(realtimeFrame('new','after history'));
     expect(events.map(event=>event.message?.id)).toEqual(['old','dup','new']);
+    expect(events.map(event=>event.origin)).toEqual(['replay','replay','live']);
     connection.close();
   });
 
