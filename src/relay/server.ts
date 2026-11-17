@@ -126,3 +126,5 @@ export function attachChatbusRelayServer(options: ChatbusRelayServerOptions): Ch
 
 export { fetchKickWebhookPublicKey, verifyKickChatWebhook } from '../platforms/kick/webhook';
 export type { KickChatWebhookInput, VerifiedKickChatDelivery } from '../platforms/kick/webhook';
+export { createKickWebhookReceiver } from '../platforms/kick/webhookReceiver';
+export type { KickWebhookReceiver, KickWebhookReceiverOptions, KickWebhookRegistration } from '../platforms/kick/webhookReceiver';
