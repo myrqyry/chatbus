@@ -487,12 +487,6 @@ grant access to a rejected WebSocket, or provision a relay. The default
 remains Kick's web realtime API. See
 [relay lifecycle and Kick integration evidence](docs/relay-lifecycle-2026-11-17.md).
 
-For official event delivery, the Node-only `@myrqyry/chatbus/server`
-entry also provides signed `chat.message.sent` verification and normalization.
-See [official webhook intake](docs/kick-official-webhooks.md) for its exact
-security and host responsibilities. Live registration and fanout are not yet
-implemented.
-
 
 ## Precedence
 
