@@ -361,3 +361,6 @@ export type {OAuthProvider,OAuthClient,OAuthBeginOptions,OAuthTokenOptions,OAuth
 
 export { connectTikTokChat, createTikTokLiveDriver, normalizeTikTokChannel, normalizeTikTokEvent } from './platforms/tiktok';
 export type { TikTokConnectOptions, TikTokConnection, TikTokDriver, TikTokNormalizeContext } from './platforms/tiktok';
+
+export { createRepeatDetector } from './messages/repeats';
+export type { RepeatMatch, RepeatSenderScope, RepeatDetectorOptions, RepeatInput, RepeatObservation } from './messages/repeats';
