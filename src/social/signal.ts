@@ -17,6 +17,10 @@ export interface SocialSignalV1 {
     id?: string;
     occurredAtMs: number;
     receivedAtMs: number;
+    /** Provider-scoped subscription tier when the source supplies one.
+     * Twitch's 1000/2000/3000 become 1/2/3 and Prime remains Prime; YouTube
+     * keeps its member-level name. Not a cross-platform identity ranking. */
+    tier?: string;
   };
   actor?: {
     platform: ChatPlatform;
@@ -55,6 +59,27 @@ const nonnegativeCount = (candidate: unknown): number | undefined =>
   typeof candidate === 'number' && Number.isSafeInteger(candidate) && candidate >= 0
     ? candidate : undefined;
 
+const boundedText = (candidate: unknown, limit: number): string | undefined =>
+  typeof candidate === 'string' && candidate.trim()
+    ? candidate.trim().slice(0, limit) : undefined;
+
+/** Known subscription tier only; never inferred from names, badges or prices. */
+function subscriptionTier(event: ChatEvent): string | undefined {
+  if (event.type !== 'subscription' && event.type !== 'gift-subscription') return undefined;
+  if (!event.data || typeof event.data !== 'object' || Array.isArray(event.data)) return undefined;
+  const data = event.data as Record<string, unknown>;
+  const nested = data.event && typeof data.event === 'object' && !Array.isArray(data.event)
+    ? data.event as Record<string, unknown> : {};
+  const raw = boundedText(nested.sub_tier ?? data.sub_tier, 40);
+  if (raw) {
+    const numeric = Number(raw);
+    return Number.isInteger(numeric) && numeric > 0 && numeric % 1000 === 0 && numeric <= 3000
+      ? String(numeric / 1000) : raw;
+  }
+  // YouTube membership notices spread newSponsorDetails or memberMilestoneChatDetails.
+  return boundedText(data.memberLevelName, 80);
+}
+
 const fromUser = (user: ChatUser | undefined): SocialSignalV1['actor'] =>
   user && user.username.trim() ? {
     platform: user.platform,
@@ -92,6 +117,7 @@ export function toSocialSignal(
   if (count !== undefined) measurements.count = count;
 
   const id = safeId(event.id) ?? safeId(event.message?.id);
+  const tier = subscriptionTier(event);
   const upstream = safeId(data.source);
   const upstreamBatchId = safeId(data.streamlabsEventId);
   const actor = fromUser(event.user ?? event.message?.user);
@@ -116,6 +142,7 @@ export function toSocialSignal(
       ...(id ? { id } : {}),
       occurredAtMs: event.timestamp,
       receivedAtMs,
+      ...(tier ? { tier } : {}),
     },
     ...(actor ? { actor } : {}),
     ...(message ? { message: {

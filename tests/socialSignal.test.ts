@@ -58,6 +58,31 @@ describe('Chatbus social signal v1', () => {
     });
   });
 
+  it('exposes known subscription tiers without inferring them for other events', () => {
+    const twitchSub = (sub_tier: string): ChatEvent => ({
+      type: 'subscription', platform: 'twitch', timestamp: 100, id: 'sub-'+sub_tier,
+      data: { kind: 'chat-notification', noticeType: 'sub', event: { sub_tier } },
+    });
+    expect(toSocialSignal(twitchSub('1000')).event.tier).toBe('1');
+    expect(toSocialSignal(twitchSub('2000')).event.tier).toBe('2');
+    expect(toSocialSignal(twitchSub('3000')).event.tier).toBe('3');
+    expect(toSocialSignal(twitchSub('Prime')).event.tier).toBe('Prime');
+    const youtube = toSocialSignal({
+      type: 'subscription', platform: 'youtube', timestamp: 100,
+      data: { kind: 'new-member', memberLevelName: 'Tier 2' },
+    });
+    expect(youtube.event.tier).toBe('Tier 2');
+    const gift = toSocialSignal({
+      type: 'gift-subscription', platform: 'twitch', timestamp: 100,
+      data: { kind: 'chat-notification', noticeType: 'community_sub_gift', event: { sub_tier: '2000' } },
+    });
+    expect(gift.event.tier).toBe('2');
+    expect(toSocialSignal(message).event.tier).toBeUndefined();
+    expect(toSocialSignal({
+      type: 'donation', platform: 'youtube', timestamp: 100, data: { tier: 7 },
+    }).event.tier).toBeUndefined();
+  });
+
   it('rejects impossible receipt/event times rather than creating misleading evidence', () => {
     expect(() => toSocialSignal({ ...message, timestamp: Number.NaN },
       { receivedAtMs: 2000 })).toThrow('timestamp');

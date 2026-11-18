@@ -28,7 +28,11 @@ replay, and destination routing.
   upstream aggregator and `origin` (`live`, `replay`, `test`).
 - `event`: type, optional **real** event ID, upstream/normalized event
   timestamp (`occurredAtMs`), separate local projection/receipt wall time
-  (`receivedAtMs`).
+  (`receivedAtMs`), and `tier` for subscription/gift-subscription events when
+  the source supplies one. Twitch's `1000`/`2000`/`3000` become `1`/`2`/`3`
+  and `Prime` remains `Prime`; YouTube keeps its member-level name. Tiers are
+  provider-scoped labels, not cross-platform identity or intent rankings, and
+  are never inferred from names, badges or prices.
 - `actor`: platform-scoped original account; not a cross-service person ID.
 - `message`: text, message ID, parent and thread IDs when present.
 - `upstreamBatchId`: upstream correlation only, not proof of duplicate content.
