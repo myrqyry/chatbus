@@ -69,6 +69,53 @@ describe('Twitch IRC exact parser and normalized events', () => {
     expect(unclosed?.message?.text).toBe('\x01ACTION '+body);
   });
 
+  it('normalizes Twitch Tier 2/3 GIPHY spans without changing the exact CDN URL',()=>{
+    const label='[Y A Y Yes GIF by Djemilah Birnie]';
+    const url='https://media4.giphy.com/media/joSNxeswxuc74Juo8X/giphy.gif?cid=a&ep=b&rid=giphy.gif&ct=g';
+    const line='@id=gif-one;gifs=0-33|joSNxeswxuc74Juo8X|'+url+
+      ' :viewer!viewer@tmi.twitch.tv PRIVMSG #host :'+label;
+    const event=normalizeTwitchIrcFrame(parse(line),{channel:'host'});
+    expect(event?.message?.fragments).toEqual([{type:'media',mediaType:'gif',
+      text:label,id:'joSNxeswxuc74Juo8X',url,alt:label}]);
+    expect(event?.message?.user.username).toBe('viewer');
+  });
+
+  it('keeps native emotes, plain text, and separate GIF records in order',()=>{
+    const first='[FIRST]',second='[SECOND]';
+    const text='Kappa '+first+' then '+second+'!';
+    const a=text.indexOf(first),b=text.indexOf(second);
+    const url1='https://media1.giphy.com/media/one/giphy.gif?x=1,2';
+    const url2='https://i.giphy.com/media/two/giphy.gif?x=3';
+    const gifs=a+'-'+(a+first.length-1)+'|one|'+url1+
+      ','+b+'-'+(b+second.length-1)+'|two|'+url2;
+    const line='@id=two-gifs;emotes=25:0-4;gifs='+gifs+
+      ' :viewer!viewer@tmi.twitch.tv PRIVMSG #host :'+text;
+    const parts=normalizeTwitchIrcFrame(parse(line),{channel:'host'})?.message?.fragments;
+    expect(parts?.map(p=>p.type)).toEqual(['emote','text','media','text','media','text']);
+    expect(parts?.[2]).toMatchObject({type:'media',url:url1,text:first});
+    expect(parts?.[4]).toMatchObject({type:'media',url:url2,text:second});
+  });
+
+  it('rejects unsafe/overlapping ranges and accounts for CTCP ACTION positions',()=>{
+    const url='https://media2.giphy.com/media/safe/giphy.gif?cid=stay';
+    const line=(gifs:string,text='hello world')=>'@id=valid-gif;gifs='+gifs+
+      ' :viewer!viewer@tmi.twitch.tv PRIVMSG #host :'+text;
+    expect(normalizeTwitchIrcFrame(parse(line(
+      '0-4|good|'+url+',2-8|overlap|'+url)),{channel:'host'})?.message?.fragments)
+      .toMatchObject([{type:'media',text:'hello'},{type:'text',text:' world'}]);
+    for(const bad of ['0-4|x|javascript:alert(1)',
+      '0-4|x|https://giphy.com.evil.example/gif.gif',
+      '0-999|x|'+url]){
+      expect(normalizeTwitchIrcFrame(parse(line(bad)),{channel:'host'})?.message?.fragments)
+        .toEqual([{type:'text',text:'hello world'}]);
+    }
+    const label='[GIF]';
+    const action='\x01ACTION '+label+'\x01';
+    const actionLine=line('8-12|good|'+url,action);
+    expect(normalizeTwitchIrcFrame(parse(actionLine),{channel:'host'})?.message?.fragments)
+      .toMatchObject([{type:'media',text:label,url}]);
+  });
+
   it('rejects channel spoofing and command-string matches in text', () => {
     expect(normalizeTwitchIrcFrame(parse(privmsg().replace('PRIVMSG #host', 'PRIVMSG #other')), { channel: 'host' })).toBeNull();
     expect(normalizeTwitchIrcFrame(parse(':viewer!x@y NOTICE #host :PRIVMSG fake'), { channel: 'host' })).toBeNull();

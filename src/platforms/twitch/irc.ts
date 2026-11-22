@@ -1,6 +1,6 @@
-import type { ChatConnectionState, ChatEvent, ChatMessage, ChatUser } from '../../types/chat';
+import type { ChatConnectionState, ChatEvent, ChatFragment, ChatMessage, ChatUser } from '../../types/chat';
 import type { EmoteSet } from '../../types/emotes';
-import { parseMessageFragments, twitchEmoteSpansFromTag } from '../../messages/parse';
+import { appendMessageFragments, twitchEmoteSpansFromTag } from '../../messages/parse';
 
 const IRC_URL = 'wss://irc-ws.chat.twitch.tv:443';
 const MAX_BUFFER_LENGTH = 128 * 1024;
@@ -87,6 +87,48 @@ const parseBadges = (value?: string) => (value ?? '').split(',').flatMap((pair) 
   if (slash <= 0 || slash === pair.length - 1) return [];
   return [{ provider: 'twitch' as const, id: pair.slice(0, slash), version: pair.slice(slash + 1) }];
 });
+/** Twitch's PRIVMSG gifs tag uses zero-based inclusive ranges followed by
+ * a GIPHY ID and the FULL, unmodified CDN URL. Position tags are metadata,
+ * not an invitation to expand arbitrary pasted links into media.
+ * https://dev.twitch.tv/docs/chat/irc/#privmsg-twitch-tags
+ */
+interface TwitchGifSpan {start:number;end:number;id:string;url:string}
+const validTwitchGifUrl=(raw:string):boolean=>{
+  if(raw.length>4096 || !raw.startsWith('https://'))return false;
+  try{
+    const url=new URL(raw);
+    return url.protocol==='https:' && !url.username && !url.password &&
+      (url.hostname==='giphy.com'||url.hostname.endsWith('.giphy.com'));
+  }catch{return false;}
+};
+const twitchGifSpansFromTag=(
+  value:string|undefined,text:string,actionOffset:number,
+):TwitchGifSpan[]=>{
+  if(!value || value.length>16_384)return [];
+  const found:TwitchGifSpan[]=[];
+  // A GIF URL can contain a literal comma in its query string. Twitch
+  // separates GIF records with commas followed by a new range header.
+  const entries=value.split(/,(?=\d+-\d+\|)/u).slice(0,16);
+  for(const entry of entries){
+    const match=/^(\d{1,6})-(\d{1,6})\|([a-zA-Z0-9_-]{1,128})\|(.+)$/u.exec(entry);
+    if(!match)continue;
+    const start=Number(match[1])-actionOffset;
+    const end=Number(match[2])-actionOffset;
+    const id=match[3]!,url=match[4]!;
+    if(start<0 || end<start || end>=text.length || !validTwitchGifUrl(url))continue;
+    found.push({start,end,id,url});
+  }
+  // A malformed overlapping span cannot duplicate or remove content.
+  found.sort((a,b)=>a.start-b.start||a.end-b.end);
+  const safe:TwitchGifSpan[]=[];
+  for(const entry of found){
+    if(safe.length>=8)break;
+    if(safe.length && entry.start<=safe[safe.length-1]!.end)continue;
+    safe.push(entry);
+  }
+  return safe;
+};
+
 const sourceFromTags = (tags: Record<string, string>): ChatMessage['source'] => {
   const channelId = optionalTag(tags, 'source-room-id');
   const messageId = optionalTag(tags, 'source-id');
@@ -166,14 +208,35 @@ export function normalizeTwitchIrcFrame(
     const colon = item.indexOf(':');
     if (colon > 0) nativeEmotes[item.slice(0, colon)] = item.slice(colon + 1).split(',');
   }
-  const fragments = parseMessageFragments(text, {
-    emotes: context.emotes,
-    nativeEmotes: twitchEmoteSpansFromTag(nativeEmotes).flatMap(span => {
-      if (!isAction) return [span];
-      return span.start >= 8 && span.end < incomingText.length - 1
-        ? [{ ...span, start: span.start - 8, end: span.end - 8 }] : [];
-    }),
+  const emoteSpans=twitchEmoteSpansFromTag(nativeEmotes).flatMap(span => {
+    if(!isAction)return [span];
+    return span.start>=8 && span.end<incomingText.length-1
+      ? [{...span,start:span.start-8,end:span.end-8}]:[];
   });
+  const gifs=command==='PRIVMSG'
+    ?twitchGifSpansFromTag(tags.gifs,text,isAction?8:0):[];
+  // Feed normal stretches through the existing emote parser. Split only
+  // at official GIF ranges, so text/emote/third-party ordering is preserved.
+  const fragments:ChatFragment[]=[];
+  const appendRange=(from:number,to:number):void=>{
+    if(from>=to)return;
+    appendMessageFragments(text.slice(from,to),fragments,{
+      emotes:context.emotes,
+      nativeEmotes:emoteSpans.filter(span=>
+        span.start>=from&&span.end<to).map(span=>({
+          ...span,start:span.start-from,end:span.end-from,
+        })),
+    });
+  };
+  let cursor=0;
+  for(const gif of gifs){
+    appendRange(cursor,gif.start);
+    const label=text.slice(gif.start,gif.end+1);
+    fragments.push({type:'media',mediaType:'gif',text:label,
+      id:gif.id,url:gif.url,alt:label});
+    cursor=gif.end+1;
+  }
+  appendRange(cursor,text.length);
   const replyToMessageId = optionalTag(tags, 'reply-parent-msg-id');
   const source = sourceFromTags(tags);
   const message: ChatMessage = {

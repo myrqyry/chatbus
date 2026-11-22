@@ -12,6 +12,16 @@ Chatbus provides a small optional Twitch IRC transport, separate from the authen
 - Pure parsers do not invent live origin or upstream IDs. The live connection sets origin:live and generates visibly local fallback message IDs if Twitch tags omit an ID. It never fabricates upstream user IDs.
 - AbortSignal and close() retire sockets/timers and suppress late callbacks. No cross-browser fanout, OAuth handling, chat writing, or authenticated EventSub changes.
 
+## Tier 2/3 subscriber GIFs (GIPHY)
+
+Twitch's 2026 gifs PRIVMSG tag provides comma-separated entries of the form start-end|gifID|gifURL, with inclusive zero-based character ranges. Chatbus preserves valid tags as ordered media fragments, with mediaType=gif, the original alt label, a stable GIF ID and the **full, unmodified Twitch-supplied URL**. Ordinary text and native/third-party emotes remain in order. A pasted GIPHY link without Twitch metadata remains plain text; /me CTCP ACTION offsets are adjusted as with emotes.
+
+Validation is bounded: 16 candidate records, eight accepted non-overlapping GIFs, 16 KiB of tag text, and 4 KiB per URL. Only HTTPS GIPHY hosts (giphy.com or its subdomains) without URL credentials are accepted. Invalid spans and URLs are ignored rather than consuming the underlying text. Query parameters must not be removed: Twitch explicitly requires using the full GIF URL. Chatbus emits provider evidence, not a rendering, authorization, or subscriber-eligibility decision.
+
+The IRC parser regression tests exercise two GIFs with comma-containing query strings, native emote order, invalid ranges/hosts, and CTCP ACTION offsets. Native OBS and a real Tier 2/3 subscriber chat event remain unverified.
+
+Official references: https://dev.twitch.tv/docs/chat/irc/ and https://dev.twitch.tv/docs/eventsub/reference/chat.
+
 ## Example
 
     import { connectTwitchIrcChat } from '@myrqyry/chatbus';
