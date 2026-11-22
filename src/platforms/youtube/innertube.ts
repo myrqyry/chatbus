@@ -1,4 +1,5 @@
 import type { ChatConnectionState, ChatEvent } from '../../types/chat';
+import { createChatBus, type ChatBusOptions } from '../../bus';
 import {
   normalizeYouTubeInnertubeChatItem,
   type YouTubeInnertubeChatItem,
@@ -124,4 +125,9 @@ export async function connectYouTubeInnertubeChat(
     throw error;
   }
   return { liveId: source.liveId ?? options.liveId, close };
+}
+
+/** Node-only Chatbus manager with both official and optional public YouTube modes. */
+export function createNodeChatBus(options: Omit<ChatBusOptions, 'connectYouTubeInnertube'>) {
+  return createChatBus({ ...options, connectYouTubeInnertube: connectYouTubeInnertubeChat });
 }

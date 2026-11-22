@@ -65,8 +65,11 @@ preserving meaningful updates to mutable social events.
 `connectYouTubeInnertubeChat()`. This separate, read-only adapter uses
 `youtube-chat-next@3.1.0` to read a public livestream by channel handle,
 YouTube channel ID, or live video ID **without supplying credentials**.
-It is intentionally not imported by the browser-safe main entry or by
-`createChatBus()`.
+It is intentionally not imported by the browser-safe main entry. The default
+`createChatBus()` can accept an explicit `connectYouTubeInnertube` factory for
+`{platform:'youtube', transport:'innertube'}` connections, or a Node consumer
+can use `createNodeChatBus()` from the isolated subpath to supply the factory.
+No automatic fallback silently changes the official transport.
 
 The reader explicitly selects YouTube's **Live chat** (not filtered Top chat),
 uses the upstream self-scheduling fetch loop and requested poll interval, and

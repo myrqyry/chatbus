@@ -5,6 +5,7 @@ import { connectTwitchChat } from './platforms/twitch/connect';
 import type { TwitchConnectOptions } from './platforms/twitch/types';
 import { connectYouTubeChat } from './platforms/youtube/connect';
 import type { YouTubeConnectOptions } from './platforms/youtube/types';
+import type { YouTubeInnertubeOptions, YouTubeInnertubeConnection } from './platforms/youtube/innertube';
 import { connectTikTokChat, normalizeTikTokChannel, type TikTokConnectOptions } from './platforms/tiktok';
 
 export interface ChatBusConnectionState {
@@ -24,16 +25,20 @@ export interface ChatBusOptions {
   onEvent: (event: ChatEvent) => void;
   onConnectionStateChange?: (connection: ChatBusConnectionState) => void;
   onError?: (error: Error, context: ChatBusErrorContext) => void;
+  /** Node-only adapter supplied by the optional InnerTube entrypoint. Never bundled into the browser main entry. */
+  connectYouTubeInnertube?: (options: YouTubeInnertubeOptions) => Promise<YouTubeInnertubeConnection>;
 }
 
 type ManagedTwitchOptions = Omit<TwitchConnectOptions, 'onEvent' | 'onStateChange' | 'onError'>;
 type ManagedKickOptions = Omit<KickConnectOptions, 'onEvent' | 'onStateChange' | 'onError'>;
 type ManagedYouTubeOptions = Omit<YouTubeConnectOptions, 'onEvent' | 'onStateChange' | 'onError'>;
+type ManagedInnertubeOptions = Omit<YouTubeInnertubeOptions, 'onEvent' | 'onStateChange' | 'onError'>;
 
 export type ChatBusConnectionSpec =
   | { id?: string; platform: 'twitch'; options: ManagedTwitchOptions }
   | { id?: string; platform: 'kick'; options: ManagedKickOptions }
-  | { id?: string; platform: 'youtube'; options: ManagedYouTubeOptions }
+  | { id?: string; platform: 'youtube'; transport?: 'official'; options: ManagedYouTubeOptions }
+  | { id?: string; platform: 'youtube'; transport: 'innertube'; options: ManagedInnertubeOptions }
   | { id?: string; platform: 'tiktok'; options: Omit<TikTokConnectOptions, 'onEvent' | 'onStateChange' | 'onError'> };
 
 export interface ChatBusConnectionHandle {
@@ -52,6 +57,9 @@ export interface ChatBus {
 
 const targetFor = (spec: ChatBusConnectionSpec): string => {
   if (spec.platform === 'youtube') {
+    if (spec.transport === 'innertube') {
+      return spec.options.handle?.trim() || spec.options.channelId?.trim() || spec.options.liveId?.trim() || '';
+    }
     return spec.options.videoId?.trim() || spec.options.liveChatId?.trim() || 'youtube';
   }
   if (spec.platform === 'tiktok') return normalizeTikTokChannel(spec.options.channel);
@@ -108,6 +116,14 @@ export function createChatBus(options: ChatBusOptions): ChatBus {
         closeConnection = connection.close;
       } else if (spec.platform === 'tiktok') {
         const connection = connectTikTokChat({...spec.options, onEvent: options.onEvent, onStateChange, onError});
+        closeConnection = connection.close;
+      } else if (spec.transport === 'innertube') {
+        if (!options.connectYouTubeInnertube) {
+          throw new Error('YouTube InnerTube requires the optional Node connector; use createNodeChatBus or inject connectYouTubeInnertube');
+        }
+        const connection = await options.connectYouTubeInnertube({
+          ...spec.options, onEvent: options.onEvent, onStateChange, onError,
+        });
         closeConnection = connection.close;
       } else {
         const connection = await connectYouTubeChat({

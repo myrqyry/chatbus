@@ -67,9 +67,10 @@ youtube.close();
 It selects unfiltered Live chat, honors the server's polling cadence, and
 preserves custom emoji images and paid chat events. The reader is not a
 replacement for the official connector: it uses unsupported YouTube web
-endpoints and may break or be rate-limited. It is not currently managed by
-`createChatBus()`; route its events through the same application callback or
-relay. Details: [YouTube Live chat](docs/youtube-live-chat.md).
+endpoints and may break or be rate-limited. For managed Node connections, `createNodeChatBus()` from the same subpath accepts
+`{platform:'youtube', transport:'innertube', options:{liveId:'...'}}`, retaining
+connection states and event routing. The browser-safe `createChatBus()` stays
+unchanged unless an explicit Node connector is supplied. Details: [YouTube Live chat](docs/youtube-live-chat.md).
 
 ## Emote loader
 
