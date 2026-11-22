@@ -40,14 +40,28 @@ const request = async (
 class YouTubeApiError extends Error {
   readonly status: number;
   readonly reason?: string;
+  readonly retryAfterMs?: number;
 
-  constructor(label: string, status: number, message?: string, reason?: string) {
+  constructor(label: string, status: number, message?: string, reason?: string, retryAfterMs?: number) {
     super(`${label} failed with ${status}${message ? `: ${message}` : ''}`);
     this.name = 'YouTubeApiError';
     this.status = status;
     this.reason = reason;
+    this.retryAfterMs = retryAfterMs;
   }
 }
+
+/** Retry-After can be a number of seconds or an HTTP date. */
+const retryAfterMs = (header: string | null): number | undefined => {
+  if (!header) return undefined;
+  const seconds = Number(header);
+  if (Number.isFinite(seconds)) {
+    const delay = seconds * 1_000;
+    return Number.isFinite(delay) && delay >= 0 ? delay : undefined;
+  }
+  const deadline = Date.parse(header);
+  return Number.isFinite(deadline) ? Math.max(0, deadline - Date.now()) : undefined;
+};
 
 const responseError = async (response: Response, label: string): Promise<YouTubeApiError> => {
   let message: string | undefined;
@@ -61,7 +75,10 @@ const responseError = async (response: Response, label: string): Promise<YouTube
   } catch {
     // Status is still useful when Google does not return JSON.
   }
-  return new YouTubeApiError(label, response.status, message, reason);
+  return new YouTubeApiError(
+    label, response.status, message, reason,
+    retryAfterMs(response.headers.get('Retry-After')),
+  );
 };
 
 const TERMINAL_LIVE_CHAT_REASONS = new Set([
@@ -260,7 +277,12 @@ export async function connectYouTubeChat(options: YouTubeConnectOptions): Promis
         }
         connected = false;
         options.onStateChange?.('reconnecting');
-        const delay = Math.min(1_000 * (2 ** reconnectAttempt++), MAX_RECONNECT_MS);
+        const backoffMs = Math.min(1_000 * (2 ** reconnectAttempt++), MAX_RECONNECT_MS);
+        const retryDelay = error instanceof YouTubeApiError &&
+          (error.status === 429 || error.status === 503)
+          ? error.retryAfterMs : undefined;
+        // Never retry sooner than YouTube's explicit Retry-After, even if it exceeds our normal cap.
+        const delay = retryDelay === undefined ? backoffMs : Math.max(backoffMs, retryDelay);
         try {
           await waitFor(delay, controller.signal);
         } catch {

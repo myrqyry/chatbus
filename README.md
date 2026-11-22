@@ -46,6 +46,31 @@ bus.close();
 Duplicate IDs are rejected rather than silently replacing a live connection.
 Transport-specific connectors still own their own reconnect behavior.
 
+### Public YouTube chat without credentials (Node only)
+
+For public streams, Chatbus also offers an **optional unofficial** read-only
+InnerTube adapter, isolated from the official API and the browser-safe entry:
+
+```ts
+import { connectYouTubeInnertubeChat } from '@myrqyry/chatbus/youtube-innertube';
+
+const youtube = await connectYouTubeInnertubeChat({
+  handle: '@ExampleChannel', // alternatively channelId or liveId
+  onEvent: handleSocialEvent, // standard ChatEvent, with native YouTube emoji fragments
+  onError: console.error,
+});
+
+// When the overlay session ends:
+youtube.close();
+```
+
+It selects unfiltered Live chat, honors the server's polling cadence, and
+preserves custom emoji images and paid chat events. The reader is not a
+replacement for the official connector: it uses unsupported YouTube web
+endpoints and may break or be rate-limited. It is not currently managed by
+`createChatBus()`; route its events through the same application callback or
+relay. Details: [YouTube Live chat](docs/youtube-live-chat.md).
+
 ## Emote loader
 
 Use the convenience API when the application only needs the merged emote set:

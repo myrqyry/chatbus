@@ -9,5 +9,7 @@ Browser/Electron-native YouTube Live Chat transport and normalization.
 - Keep Super Chat/Super Sticker/Jewels monetary events as `donation`; do not conflate them with Twitch `cheer`.
 - Preserve platform-specific details under structured `data`; do not force false cross-platform equivalence.
 - Chatbus does not own YouTube OAuth UI, refresh-token persistence, or renderer behavior.
+- Optional `./youtube-innertube` is Node-only and uses unsupported public web endpoints. Keep it isolated from the official browser/Electron connector and `createChatBus()`; do not silently substitute it for credentialed access.
+- The unofficial reader's pure normalizer preserves the source's emoji/image runs and paid-message semantics; transport applies `origin: 'live'` only on actual received events.
 
 Contract: `docs/youtube-live-chat.md`.

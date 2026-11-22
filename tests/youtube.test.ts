@@ -401,4 +401,31 @@ describe('YouTube live chat transport', () => {
     expect(seenUrls[1]).toContain('pageToken=page-2');
     connection.close();
   });
+
+  it('honors YouTube Retry-After before retrying a rate-limited official request', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(
+        JSON.stringify({ error: { message: 'too many requests' } }),
+        { status: 429, headers: { 'Retry-After': '7' } },
+      ))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        nextPageToken: 'finished',
+        offlineAt: '2026-11-22T00:00:00Z',
+        items: [],
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const connection = await connectYouTubeChat({
+      liveChatId: 'live-1', apiKey: 'key-1', onEvent: () => {},
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(6_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    connection.close();
+  });
 });
