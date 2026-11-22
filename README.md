@@ -72,6 +72,16 @@ endpoints and may break or be rate-limited. For managed Node connections, `creat
 connection states and event routing. The browser-safe `createChatBus()` stays
 unchanged unless an explicit Node connector is supplied. Details: [YouTube Live chat](docs/youtube-live-chat.md).
 
+## Optional Social Stream Ninja input
+
+The Node-only `@myrqyry/chatbus/social-stream` entry listens to SSN's documented
+read-only channel-4 chat feed. It provides optional platform coverage from an
+existing SSN session, including source-platform attribution, sanitized HTML
+and HTTPS emote/badge artwork, stable-ID deduplication, and reconnect handling.
+Keep the SSN session ID server-side and explicitly enable chat broadcasting in
+SSN. This independently written protocol adapter does **not** bundle SSN's
+GPL-3.0 implementation. See [Social Stream Ninja adapter](docs/social-stream-ninja.md).
+
 ## Emote loader
 
 Use the convenience API when the application only needs the merged emote set:

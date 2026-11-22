@@ -15,7 +15,8 @@
     "./streamlabs": "./src/platforms/streamlabs/index.ts",
     "./youtube-innertube": "./src/platforms/youtube/innertube.ts",
     "./relay": "./src/relay/index.ts",
-    "./server": "./src/relay/server.ts"
+    "./server": "./src/relay/server.ts",
+    "./social-stream": "./src/platforms/socialstream/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
