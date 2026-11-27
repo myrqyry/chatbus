@@ -16,7 +16,7 @@ for(const file of ['LICENSE','NOTICE'])copyFileSync(file,output+'/'+file);
 writeFileSync(output+'/index.html',`<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Chatbus browser runtime</title><h1>Chatbus browser runtime</h1>
-<p>Credential-free Twitch public chat and third-party emote discovery. This is a browser library, not a hosted relay.</p>
+<p>Credential-free Twitch and Kick public chat and third-party emote discovery. This is a browser library, not a hosted relay.</p>
 <p><a href="./chatbus.mjs">Browser ESM (current main build)</a> · <a href="./LICENSE">ELv2 license</a> · <a href="./NOTICE">Attribution</a></p>
 <p><a href="https://github.com/myrqyry/chatbus">Source, API documentation and commit history</a>. For reproducible apps, pin a source commit instead of the rolling module URL.</p></html>
 `);

@@ -1,3 +1,4 @@
+import {validatePublicPusher} from './public-transport';
 import { fetchJson } from '../../network/fetch';
 import type { KickSocketHandle, KickSocketOptions } from './types';
 
@@ -310,7 +311,10 @@ export function createKickSocket(
     const clientId=randomClientId();
     try{
       let endpoint:RealtimeEndpoint|null=null;
-      if(options.appKey){
+      if(options.resolvePublicPusher){
+        const {appKey,cluster}=validatePublicPusher(await options.resolvePublicPusher(controller.signal));
+        endpoint={provider:'pusher',url:`wss://ws-${cluster}.pusher.com/app/${appKey}?${PUSHER_VERSION}`};
+      }else if(options.appKey){
         const base=(options.baseUrl??'wss://ws-us2.pusher.com/app').replace(/\/$/u,'');
         endpoint={provider:'pusher',url:`${base}/${options.appKey}?${PUSHER_VERSION}`};
       }else{

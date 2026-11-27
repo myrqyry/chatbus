@@ -13,12 +13,19 @@ applications keep their own rendering and social-cognition models.
 ## Browser-first public chat
 
 The `@myrqyry/chatbus/browser` entrypoint contains credential-free,
-read-only browser transports. It currently advertises Twitch IRC, verified
-from a GitHub Pages origin in Chromium (real join and incoming message).
-The emote loader uses existing provider APIs and reports partial failures.
-Kick realtime negotiation is blocked by browser CORS; public YouTube
-InnerTube and TikTok require a Node host. Use a compatible relay for those
-providers rather than bypassing browser security. The official authenticated
+read-only browser transports: Twitch IRC and Kick Pusher, both verified
+from the GitHub Pages origin in Chromium with real incoming messages.
+Kick's current anonymous realtime negotiation endpoint is CORS-blocked.
+The Pages publisher requests its alternative public Pusher provider and
+publishes only the app identifier, cluster and observation time. The browser
+reads that tiny static descriptor at every connection/reconnect, rejects
+stale or invalid metadata, and subscribes directly to public chat rooms.
+No token, user credential, chat event or relay is hosted by GitHub.
+The scheduled workflow refreshes the descriptor twice daily; failures retain
+the last deployed site, with a 48-hour freshness limit for Kick metadata.
+Other origins must be allowed to fetch the descriptor or supply a trusted
+descriptor loader via `createBrowserChatSource({loadKickPublicTransport})`.
+Public YouTube InnerTube and TikTok still require a Node host. The authenticated
 connectors remain available from their existing entrypoints.
 
 ```ts

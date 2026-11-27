@@ -2,9 +2,10 @@
 
 Negotiated Kick realtime transport and normalized social events.
 
-- Do not pin a Kick realtime provider or app key. Resolve `web.kick.com/api/v1/realtime/connection` on every connection/reconnect and use the provider Kick returns.
+- Node transport: do not pin a Kick realtime provider or app key. Resolve `web.kick.com/api/v1/realtime/connection` on every connection/reconnect and use the provider Kick returns.
 - Current Kick web chat prefers Centrifugo. Mint the anonymous guest connection token from `/api/v1/realtime/auth/connection`, query the resolved channel's `/chat/connection` endpoint, answer `{}` pings with `{}`, refresh expiring tokens, and resubscribe after reconnect.
 - For Centrifugo, subscribe the current web-client channel set: `channel_<channelId>`, `channel.<channelId>`, `chatroom_<chatroomId>`, `chatrooms.<chatroomId>`, and `chatrooms.<chatroomId>.v2`. Readiness requires all requested subscription acknowledgements.
+- Browser-only exception (verified 2026-11-26): the provider negotiation endpoint is CORS-blocked but Kick explicitly offers a public Pusher app when requested. The Pages publisher obtains fresh public app metadata from Kick, not a hard-coded key; browser sockets resolve and validate the descriptor on every reconnect. Do not publish tokens or proxy chat.
 - Pusher remains a negotiated fallback. When Kick returns it, use the returned app key/cluster; never restore the retired hard-coded key.
 - `ChannelSubscriptionEvent` and `LuckyUsersWhoGotGiftSubscriptionsEvent` normalize through Chatbus; consumers should not need a parallel Kick socket solely for those events.
 - Keep reconnect/backoff state tied to a genuinely usable connection, not merely a WebSocket HTTP upgrade.

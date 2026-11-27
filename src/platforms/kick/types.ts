@@ -131,6 +131,8 @@ export interface KickNormalizeContext {
 }
 
 export interface KickSocketOptions {
+  /** Browser-only public Pusher descriptor; resolve afresh on every reconnect. */
+  resolvePublicPusher?: (signal?:AbortSignal) => Promise<import('./public-transport').KickPublicPusher>;
   appKey?: string;
   baseUrl?: string;
   /** Optional host-provided HTTP negotiation base; the provider still selects the websocket. */

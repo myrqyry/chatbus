@@ -303,6 +303,21 @@ describe('Kick socket lifecycle', () => {
     handle.close();
   });
 
+  it('refreshes public Pusher metadata on reconnect without negotiating from the browser', async()=>{
+    const resolvePublicPusher=vi.fn().mockResolvedValueOnce({appKey:'publickey1',cluster:'us2'}).mockResolvedValueOnce({appKey:'publickey2',cluster:'eu'});
+    const handle=createKickSocket(42,{channelId:'99',resolvePublicPusher});
+    try{
+      await vi.waitFor(()=>expect(MockWebSocket.instances).toHaveLength(1));
+      expect(MockWebSocket.instances[0]!.url).toContain('ws-us2.pusher.com/app/publickey1');
+      MockWebSocket.instances[0]!.emitClose();
+      await vi.advanceTimersByTimeAsync(1000);
+      await vi.waitFor(()=>expect(MockWebSocket.instances).toHaveLength(2));
+      expect(MockWebSocket.instances[1]!.url).toContain('ws-eu.pusher.com/app/publickey2');
+      expect(resolvePublicPusher).toHaveBeenCalledTimes(2);
+      expect(fetcher).not.toHaveBeenCalled();
+    }finally{handle.close();}
+  });
+
   it('uses a dynamically negotiated Pusher endpoint as fallback instead of a retired hard-coded app key', async()=>{
     fetcher.mockImplementation(async(input:string|URL|Request)=>{
       const url=String(input);
