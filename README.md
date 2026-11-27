@@ -36,7 +36,9 @@ emotes = (await source.emotes('example')).emotes;
 Run `pnpm build:browser` for a self-contained ESM file
 `dist-browser/chatbus.mjs` and its LICENSE/NOTICE. No Node runtime or
 third-party package implementation is included in this browser artifact.
-Consumers should pin a commit or bundle the entrypoint at build time.
+The GitHub Pages site serves the rolling browser module; use the
+commit-specific CI artifact or pin a source commit for reproducible apps.
+The static library is not a hosted chat relay.
 
 ## Multi-platform connection manager
 
