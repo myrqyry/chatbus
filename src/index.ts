@@ -368,3 +368,6 @@ export type { RepeatMatch, RepeatSenderScope, RepeatDetectorOptions, RepeatInput
 export {extractKickRoleBodies,createKickRoleArtworkLoader,loadKickRoleArtwork} from "./platforms/kick/role-artwork";
 export {sanitizeKickRoleBody,kickRoleImageUrl,kickRoleArtworkKey} from "./platforms/kick/role-svg";
 export type {KickRoleBodies,KickRoleKey} from "./platforms/kick/role-svg";
+
+export {browserPublicPlatforms,supportsBrowserPublicChat,createBrowserChatSource} from './browser';
+export type {BrowserPublicPlatform} from './browser';

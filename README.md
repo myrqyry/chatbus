@@ -10,6 +10,34 @@ connection lifecycle; live provider and entitlement state; capability planning;
 deterministic test/replay utilities; and bounded chat timeline state while
 applications keep their own rendering and social-cognition models.
 
+## Browser-first public chat
+
+The `@myrqyry/chatbus/browser` entrypoint contains credential-free,
+read-only browser transports. It currently advertises Twitch IRC, verified
+from a GitHub Pages origin in Chromium (real join and incoming message).
+The emote loader uses existing provider APIs and reports partial failures.
+Kick realtime negotiation is blocked by browser CORS; public YouTube
+InnerTube and TikTok require a Node host. Use a compatible relay for those
+providers rather than bypassing browser security. The official authenticated
+connectors remain available from their existing entrypoints.
+
+```ts
+import { createBrowserChatSource } from '@myrqyry/chatbus/browser';
+const source = createBrowserChatSource();
+let emotes = {};
+const connection = source.connect({
+  platform: 'twitch', channel: 'example', getEmotes: () => emotes,
+  onEvent: console.log, onStateChange: console.log, onError: console.error,
+});
+emotes = (await source.emotes('example')).emotes;
+// When the consumer is finished: connection.close();
+```
+
+Run `pnpm build:browser` for a self-contained ESM file
+`dist-browser/chatbus.mjs` and its LICENSE/NOTICE. No Node runtime or
+third-party package implementation is included in this browser artifact.
+Consumers should pin a commit or bundle the entrypoint at build time.
+
 ## Multi-platform connection manager
 
 Individual connectors remain usable directly, but `createChatBus()` provides a

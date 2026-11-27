@@ -15,6 +15,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm build:browser
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chatbus-browser
+          path: dist-browser/
+          if-no-files-found: error

@@ -13,7 +13,7 @@ pnpm typecheck   # tsc --noEmit, strict, ES2022+DOM, includes src+tests
 pnpm test        # vitest run
 ```
 
-Order: `typecheck` → `test`. CI (`verify.yml`): Node 24, `pnpm install --no-frozen-lockfile` (no lockfile committed), then same two commands. No lint/format/build scripts.
+Order: `typecheck` → `test`. CI (`verify.yml`): Node 24, `pnpm install --frozen-lockfile`, then same two commands. No lint/format/build scripts.
 
 ## Social evidence boundary
 
