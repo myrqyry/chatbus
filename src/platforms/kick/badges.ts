@@ -1,9 +1,12 @@
 /**
  * Kick subscriber badge artwork discovery. Kick's public website channel JSON
  * is undocumented and best-effort; the official chat wire supplies only refs.
- * This module is framework-neutral and does not infer arbitrary role icons.
+ * Known role vectors are acquired separately from public website assets;
+ * this module is framework-neutral and does not infer arbitrary role icons.
  */
 import type { Badge, BadgeRef } from '../../types/identity';
+import {loadKickRoleArtwork} from './role-artwork';
+import {sanitizeKickRoleBody,kickRoleArtworkKey,type KickRoleBodies} from './role-svg';
 
 export interface KickSubscriberBadgeArtwork { months:number; url:string }
 export type KickBadgeCatalogState='idle'|'loading'|'ready'|'degraded';
@@ -98,24 +101,51 @@ export async function fetchKickChannelBadgeJson(url:string):Promise<unknown> {
 }
 
 /** One catalog per channel owner/session; stale channels cannot overwrite current art. */
-export function createKickBadgeCatalog(load:JsonFetcher=fetchKickChannelBadgeJson) {
+export function createKickBadgeCatalog(
+  load:JsonFetcher=fetchKickChannelBadgeJson,
+  // A custom JSON loader is an isolated dependency by default; callers can
+  // explicitly inject the independent role loader too.
+  loadRoles:((channel:string)=>Promise<KickRoleBodies>)|null=
+    load===fetchKickChannelBadgeJson?loadKickRoleArtwork:null,
+) {
   let current:string|null=null;
   let generation=0;
   let state:KickBadgeCatalogState='idle';
   let tiers:KickSubscriberBadgeArtwork[]=[];
   let expiresAt=0;
   let pending:Promise<void>|null=null;
+  let rolePending:Promise<void>|null=null;
+  let roleBodies:KickRoleBodies={};
+  let roleExpires=0;
   return {
     loadChannel(channel:string,onReady:()=>void):Promise<void>{
       if(!CHANNEL.test(channel))return Promise.resolve();
       const slug=channel.toLowerCase();
       if(slug!==current){
-        current=slug;generation++;tiers=[];state='idle';expiresAt=0;pending=null;
+        current=slug;generation++;tiers=[];state='idle';expiresAt=0;pending=null;rolePending=null;roleBodies={};roleExpires=0;
       }
-      if(pending)return pending;
-      if(Date.now()<expiresAt)return Promise.resolve();
-      state='loading';
       const ticket=generation;
+      if(loadRoles&&!rolePending&&Date.now()>=roleExpires){
+        let request:Promise<KickRoleBodies>;
+        try{request=loadRoles(slug);}catch(error){request=Promise.reject(error);}
+        rolePending=request.then(bodies=>{
+          if(ticket!==generation)return;
+          const validated:KickRoleBodies={};
+          for(const key of ['moderator','verified','gift-1','gift-25'] as const){
+            const body=sanitizeKickRoleBody(bodies?.[key]);
+            if(body)validated[key]=body;
+          }
+          roleBodies=validated;
+          roleExpires=Date.now()+(Object.keys(validated).length===4?6*60*60*1000:10*60*1000);
+        },()=>{if(ticket===generation)roleExpires=Date.now()+5*60*1000;})
+        .then(()=>{if(ticket!==generation)return;rolePending=null;onReady();});
+      }
+      const roleWork=rolePending;
+      const settle=(subscriber:Promise<void>|null)=>roleWork
+        ?Promise.all([subscriber,roleWork]).then(()=>{}):subscriber??Promise.resolve();
+      if(pending)return settle(pending);
+      if(Date.now()<expiresAt)return settle(null);
+      state='loading';
       const url=`https://kick.com/api/v2/channels/${encodeURIComponent(slug)}`;
       let loaded:Promise<unknown>;
       try { loaded=load(url); } catch(error) { loaded=Promise.reject(error); }
@@ -135,12 +165,18 @@ export function createKickBadgeCatalog(load:JsonFetcher=fetchKickChannelBadgeJso
         onReady();
       });
       pending=request;
-      return request;
+      return settle(request);
     },
     resolve(refs:readonly BadgeRef[]):Badge[]{
-      if(state!=='ready')return [];
-      return refs.flatMap(ref=>{
-        if(ref.provider!=='kick'||ref.id.toLowerCase()!=='subscriber')return [];
+      return refs.flatMap((ref):Badge[]=>{
+        if(ref.provider!=='kick')return [];
+        const id=ref.id.toLowerCase();
+        const key=kickRoleArtworkKey(ref);
+        if(key&&roleBodies[key])return [{provider:'kick',scope:'native',id,
+          ...(id==='sub_gifter'?{version:ref.version}:{}),
+          name:id==='moderator'?'Moderator':id==='verified'?'Verified':ref.info||'Sub Gifter',
+          images:[],svgBody:roleBodies[key]}];
+        if(state!=='ready'||id!=='subscriber')return [];
         const count=ref.version;
         if(!count||!/^[1-9]\d{0,3}$/.test(count))return [];
         const months=Number(count);

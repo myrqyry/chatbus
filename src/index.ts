@@ -364,3 +364,7 @@ export type { TikTokConnectOptions, TikTokConnection, TikTokDriver, TikTokNormal
 
 export { createRepeatDetector } from './messages/repeats';
 export type { RepeatMatch, RepeatSenderScope, RepeatDetectorOptions, RepeatInput, RepeatObservation } from './messages/repeats';
+
+export {extractKickRoleBodies,createKickRoleArtworkLoader,loadKickRoleArtwork} from "./platforms/kick/role-artwork";
+export {sanitizeKickRoleBody,kickRoleImageUrl,kickRoleArtworkKey} from "./platforms/kick/role-svg";
+export type {KickRoleBodies,KickRoleKey} from "./platforms/kick/role-svg";

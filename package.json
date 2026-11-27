@@ -12,6 +12,7 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./kick-artwork": "./src/platforms/kick/role-svg.ts",
     "./streamlabs": "./src/platforms/streamlabs/index.ts",
     "./youtube-innertube": "./src/platforms/youtube/innertube.ts",
     "./relay": "./src/relay/index.ts",

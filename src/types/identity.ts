@@ -24,6 +24,9 @@ export interface Badge {
   title?: string;
   tooltip?: string;
   images: BadgeImage[];
+  /** Optional validated provider SVG body (Kick design-system 20×20 viewBox).
+   * Consumers must render as an isolated image, never as raw DOM markup. */
+  svgBody?: string;
   slot?: number;
   replaces?: string;
   color?: string;

@@ -43,3 +43,31 @@ and are resolved against channel subscriber milestones as described above.
 
 No background per-user lookup is necessary; images arrive with each message.
 This applies to future badges using the same valid native payload shape.
+
+
+## Runtime role SVG enrichment
+
+The same `createKickBadgeCatalog()` now starts an independent best-effort role
+artwork lookup when `loadChannel(channel, onReady)` runs. Chatbus discovers
+current public Kick design-system asset URLs, extracts the static named
+ModeratorBadge, VerifiedBadge, Gift1 and Gift25 SVG bodies, and validates an
+inert SVG grammar. It never evaluates downloaded JavaScript. No graphics
+are bundled or written to disk. The process-level lookup is coalesced and
+bounded by bytes, time and concurrency; it backs off on failures.
+
+The catalog resolves exact provider refs to normalized `Badge` records with
+`svgBody` and `images: []`. A native image-backed badge wins when callers
+merge the native badges first. No unknown gifting tier is inferred.
+Subscriber and role results notify independently; stale channel completions
+cannot change current results. The existing `health()` describes subscriber
+catalog health, not proof of full role-art coverage.
+
+Consumers should keep their immediate chat path nonblocking and call
+`catalog.resolve(refs)` again when notified. Use the browser-safe
+`@myrqyry/chatbus/kick-artwork` export, `kickRoleImageUrl(badge.svgBody)`,
+to validate again and construct an isolated image URL. Never insert
+the SVG body directly into HTML. Retain semantic fallbacks when no art
+is available. Low-level transport APIs remain transport-only; applications
+or relays opt into the shared catalog, rather than implementing a second
+provider-specific lookup. The runtime discovery is undocumented and does
+not establish redistribution rights to Kick's artwork.
