@@ -112,6 +112,10 @@ export interface YouTubeConnectOptions {
   videoId?: string;
   liveChatId?: string;
   apiKey?: string;
+  /** Send an application key only in a Google API request header. */
+  apiKeyHeader?: boolean;
+  /** Optional client-side minimum, never faster than the provider cadence. */
+  minPollMs?: number;
   accessToken?: string;
   channelId?: string;
   channelName?: string;

@@ -25,7 +25,7 @@ The scheduled workflow refreshes the descriptor twice daily; failures retain
 the last deployed site, with a 48-hour freshness limit for Kick metadata.
 Other origins must be allowed to fetch the descriptor or supply a trusted
 descriptor loader via `createBrowserChatSource({loadKickPublicTransport})`.
-Public YouTube InnerTube and TikTok still require a Node host. The authenticated
+Optional official YouTube chat can run in a browser with a caller-owned Data API v3 key: `createBrowserChatSource({youtubeApiKey})`. It sends the key only to Google in an API header, skips initial history, honors YouTube polling cadence with a 10-second minimum, and stops on quota/authentication errors. Use a dedicated website- and API-restricted key, never an unrestricted or shared project key. Quota is per user project. Live credentialed browser delivery is not yet verified against a real key. Public YouTube InnerTube and TikTok still require a Node host. The authenticated
 connectors remain available from their existing entrypoints.
 
 ```ts

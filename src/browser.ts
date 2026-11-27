@@ -2,6 +2,7 @@
  * and use a relay for providers without a verified browser-native path. */
 import {connectTwitchIrcChat,type TwitchIrcConnectOptions} from './platforms/twitch/irc';
 import {fetchChannelEmotesDetailed} from './emotes/loader';
+import {connectYouTubeChat} from './platforms/youtube/connect';
 import {connectKickChat} from './platforms/kick/connect';
 import {resolveKickChannel} from './platforms/kick/channel';
 import {loadKickPublicTransport,type KickPublicPusher} from './platforms/kick/public-transport';
@@ -20,11 +21,16 @@ export function supportsBrowserPublicChat(platform:unknown):platform is BrowserP
 function requireDirect(platform:Platform) {
  if(!supportsBrowserPublicChat(platform))throw new Error(platform+' requires a compatible Chatbus relay for public chat');
 }
-/** Same transport/loader seam used by local hosts. No user credentials. */
-export function createBrowserChatSource(config:{loadKickPublicTransport?:(signal?:AbortSignal)=>Promise<KickPublicPusher>}={}){
+/** Same transport/loader seam used by local hosts. YouTube optionally takes a caller-owned restricted API key. */
+export function createBrowserChatSource(config:{loadKickPublicTransport?:(signal?:AbortSignal)=>Promise<KickPublicPusher>;youtubeApiKey?:string}={}){
+ const youtubeKey=config.youtubeApiKey?.trim();
+ const requireAvailable=(platform:Platform)=>{
+  if(platform==='youtube'){if(!youtubeKey)throw Error('YouTube requires your own Data API key for browser chat');return;}
+  requireDirect(platform);
+ };
  return {
   connect({platform='twitch',...options}:Options){
-   requireDirect(platform);
+   requireAvailable(platform);
    if(platform==='twitch')return connectTwitchIrcChat(options);
    const controller=new AbortController();
    let closed=false,active:{close():void}|undefined;
@@ -36,22 +42,27 @@ export function createBrowserChatSource(config:{loadKickPublicTransport?:(signal
    if(options.signal?.aborted){close();return {close};}
    options.signal?.addEventListener('abort',close,{once:true});
    options.onStateChange?.('connecting');
-   void connectKickChat({
-    ...options,signal:controller.signal,emitInitialHistory:false,
-    socket:{resolvePublicPusher:config.loadKickPublicTransport??loadKickPublicTransport},
-    onEvent:event=>{if(!closed)options.onEvent(event);},
-    onStateChange:state=>{if(!closed)options.onStateChange?.(state);},
-    onError:error=>{if(!closed)options.onError?.(error);},
-   }).then(connection=>{if(closed)connection.close();else active=connection;},error=>{
+   const callbacks={
+    signal:controller.signal,
+    onEvent:(event:import('./types/chat').ChatEvent)=>{if(!closed)options.onEvent(event);},
+    onStateChange:(state:import('./types/chat').ChatConnectionState)=>{if(!closed)options.onStateChange?.(state);},
+    onError:(error:Error)=>{if(!closed)options.onError?.(platform==='youtube'?new Error(error.message.replaceAll(youtubeKey!,'[redacted]')):error);},
+   };
+   const pending=platform==='youtube'
+    ?connectYouTubeChat({videoId:options.channel,apiKey:youtubeKey,apiKeyHeader:true,minPollMs:10000,emitInitialHistory:false,...callbacks})
+    :connectKickChat({...options,emitInitialHistory:false,socket:{resolvePublicPusher:config.loadKickPublicTransport??loadKickPublicTransport},...callbacks});
+   void pending.then(connection=>{if(closed)connection.close();else active=connection;},error=>{
     if(closed)return;
     options.onStateChange?.('error');
-    options.onError?.(error instanceof Error?error:new Error('Kick browser connection failed'));
+    const message=error instanceof Error?error.message:platform+' browser connection failed';
+    options.onError?.(new Error(platform==='youtube'?message.replaceAll(youtubeKey!,'[redacted]'):message));
    });
    return {close};
   },
   async emotes(channel:string,platform:Platform='twitch'){
-   requireDirect(platform);
+   requireAvailable(platform);
    if(platform==='twitch')return fetchChannelEmotesDetailed(channel);
+   if(platform==='youtube')return {emotes:{},complete:true};
    const resolved=await resolveKickChannel(channel);
    const results=await Promise.all([fetchGlobalSevenTv(),...(resolved.channelId?[fetchKickChannelSevenTv(resolved.channelId)]:[])]);
    return {emotes:mergeCandidates(results.flatMap(r=>r.candidates)),complete:results.every(r=>r.status.ok)};

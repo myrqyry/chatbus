@@ -13,3 +13,5 @@ Browser/Electron-native YouTube Live Chat transport and normalization.
 - The unofficial reader's pure normalizer preserves the source's emoji/image runs and paid-message semantics; transport applies `origin: 'live'` only on actual received events.
 
 Contract: `docs/youtube-live-chat.md`.
+
+- Browser source may accept a caller-owned website- and API-restricted Data API key. Send it in a Google API header, never in source URLs or a shared hosted descriptor. Use a 10s minimum polling cadence for this mode, stop on quota/auth errors, and never advertise anonymous YouTube browser access. No provider CORS bypass.

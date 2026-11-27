@@ -402,6 +402,27 @@ describe('YouTube live chat transport', () => {
     connection.close();
   });
 
+  it('uses a browser key header, respects the slower caller cadence and stops at quota exhaustion',async()=>{
+    vi.useFakeTimers();
+    const fetchMock=vi.fn()
+      .mockResolvedValueOnce(Response.json({nextPageToken:'next',pollingIntervalMillis:100,items:[]}))
+      .mockResolvedValueOnce(Response.json({error:{message:'quota exceeded',errors:[{reason:'quotaExceeded'}]}},{status:403}));
+    vi.stubGlobal('fetch',fetchMock);
+    const errors:Error[]=[];
+    const handle=await connectYouTubeChat({liveChatId:'live-1',apiKey:'fixture-key',apiKeyHeader:true,minPollMs:10000,onEvent:()=>{},onError:e=>errors.push(e)});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(String(fetchMock.mock.calls[0]![0])).not.toContain('fixture-key');
+    expect(new Headers(fetchMock.mock.calls[0]![1].headers).get('X-Goog-Api-Key')).toBe('fixture-key');
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(errors[0]?.message).toContain('quota');
+    handle.close();
+  });
+
   it('honors YouTube Retry-After before retrying a rate-limited official request', async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn()

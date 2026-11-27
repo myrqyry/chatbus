@@ -15,13 +15,13 @@ const DEFAULT_POLL_MS = 1_000;
 const MAX_RECONNECT_MS = 30_000;
 const DEDUPE_MAX = 2_000;
 
-const credentialsFor = (options: Pick<YouTubeConnectOptions, 'apiKey' | 'accessToken'>) => {
+const credentialsFor = (options: Pick<YouTubeConnectOptions, 'apiKey' | 'accessToken' | 'apiKeyHeader'>) => {
   const apiKey = options.apiKey?.trim();
   const accessToken = options.accessToken?.trim();
   if (!apiKey && !accessToken) {
     throw new Error('YouTube chat requires an API key or OAuth access token');
   }
-  return { apiKey, accessToken };
+  return { apiKey, accessToken, apiKeyHeader:options.apiKeyHeader===true };
 };
 
 const request = async (
@@ -30,11 +30,13 @@ const request = async (
   credentials: ReturnType<typeof credentialsFor>,
   signal?: AbortSignal,
 ): Promise<Response> => {
-  if (credentials.apiKey) params.set('key', credentials.apiKey);
-  const headers = credentials.accessToken
-    ? { Authorization: `Bearer ${credentials.accessToken}` }
-    : undefined;
-  return fetchWithTimeout(`${API_BASE}${path}?${params.toString()}`, { headers, signal }, 10_000, 0);
+  const headers:Record<string,string>={};
+  if(credentials.apiKey){
+    if(credentials.apiKeyHeader)headers['X-Goog-Api-Key']=credentials.apiKey;
+    else params.set('key',credentials.apiKey);
+  }
+  if(credentials.accessToken)headers.Authorization='Bearer '+credentials.accessToken;
+  return fetchWithTimeout(`${API_BASE}${path}?${params.toString()}`, { headers, signal, credentials:'omit',redirect:'error' }, 10_000, 0);
 };
 
 class YouTubeApiError extends Error {
@@ -86,11 +88,16 @@ const TERMINAL_LIVE_CHAT_REASONS = new Set([
   'liveChatDisabled',
   'liveChatEnded',
   'liveChatNotFound',
+  'quotaExceeded',
+  'dailyLimitExceeded',
+  'keyInvalid',
+  'accessNotConfigured',
+  'ipRefererBlocked',
 ]);
 
 export async function resolveYouTubeLiveChat(
   videoId: string,
-  options: Pick<YouTubeConnectOptions, 'apiKey' | 'accessToken' | 'signal'>,
+  options: Pick<YouTubeConnectOptions, 'apiKey' | 'accessToken' | 'apiKeyHeader' | 'signal'>,
 ): Promise<YouTubeResolvedLiveChat> {
   const normalizedVideoId = videoId.trim();
   if (!normalizedVideoId) throw new Error('YouTube video id must not be empty');
@@ -154,6 +161,7 @@ export async function connectYouTubeChat(options: YouTubeConnectOptions): Promis
       }
     : await resolveYouTubeLiveChat(options.videoId!, options);
 
+  if(options.signal?.aborted)throw new DOMException('The operation was aborted.', 'AbortError');
   const liveChat: YouTubeResolvedLiveChat = {
     ...resolved,
     channelId: options.channelId ?? resolved.channelId,
@@ -254,13 +262,14 @@ export async function connectYouTubeChat(options: YouTubeConnectOptions): Promis
           break;
         }
 
-        const pollMs = Math.max(MIN_POLL_MS, payload.pollingIntervalMillis ?? DEFAULT_POLL_MS);
+        const pollMs = Math.max(MIN_POLL_MS,Number.isFinite(options.minPollMs)?options.minPollMs!:0, payload.pollingIntervalMillis ?? DEFAULT_POLL_MS);
         await waitFor(pollMs, controller.signal);
       } catch (error) {
         if (controller.signal.aborted || isAbort(error)) break;
         const resolvedError = error instanceof Error ? error : new Error('YouTube chat connection failed');
+        if(credentials.apiKey&&resolvedError.message.includes(credentials.apiKey))resolvedError.message=resolvedError.message.replaceAll(credentials.apiKey,'[redacted]');
         options.onError?.(resolvedError);
-        if (error instanceof YouTubeApiError && error.reason && TERMINAL_LIVE_CHAT_REASONS.has(error.reason)) {
+        if (error instanceof YouTubeApiError && ((error.reason && TERMINAL_LIVE_CHAT_REASONS.has(error.reason)) || ([400,401,403,404].includes(error.status) && error.reason!=='rateLimitExceeded' && error.reason!=='userRateLimitExceeded'))) {
           if (error.reason === 'liveChatEnded') {
             options.onEvent({
               id: `youtube-chat-ended:${liveChat.liveChatId}`,
@@ -277,9 +286,9 @@ export async function connectYouTubeChat(options: YouTubeConnectOptions): Promis
         }
         connected = false;
         options.onStateChange?.('reconnecting');
-        const backoffMs = Math.min(1_000 * (2 ** reconnectAttempt++), MAX_RECONNECT_MS);
+        const backoffMs = Math.max(Number.isFinite(options.minPollMs)?options.minPollMs!:0,Math.min(1_000 * (2 ** reconnectAttempt++), MAX_RECONNECT_MS));
         const retryDelay = error instanceof YouTubeApiError &&
-          (error.status === 429 || error.status === 503)
+          (error.status === 429 || error.status === 503 || error.status===403)
           ? error.retryAfterMs : undefined;
         // Never retry sooner than YouTube's explicit Retry-After, even if it exceeds our normal cap.
         const delay = retryDelay === undefined ? backoffMs : Math.max(backoffMs, retryDelay);
