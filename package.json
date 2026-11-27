@@ -1,6 +1,7 @@
 {
   "name": "@myrqyry/chatbus",
   "private": true,
+  "license": "Elastic-2.0",
   "description": "Framework-neutral livestream chat transport, normalization, emotes, state, and replay.",
   "repository": {
     "type": "git",

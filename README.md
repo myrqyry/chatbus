@@ -618,3 +618,21 @@ Anonymous chat reception was live-verified, including actual relay-driven
 upstream disconnect. The transport is unofficial and depends on external
 signing availability. See [TikTok LIVE integration](docs/tiktok-live.md)
 for version, configuration, event coverage, and verification boundaries.
+
+## License
+
+Chatbus's original software is available under the [Elastic License 2.0
+(ELv2)](LICENSE). Copyright © 2026 myrqyry.
+
+You may use, modify, integrate, self-host and redistribute Chatbus under the
+license terms, including in commercial applications. You may not provide
+Chatbus to third parties as a hosted or managed service exposing a substantial
+set of its features or functionality, or remove or obscure required licensing,
+copyright or other notices. Separate licensing arrangements require permission
+from the applicable rights holder. ELv2 is source-available, not an OSI-approved
+open-source license.
+
+Third-party packages, provider artwork, emotes, badges and service data retain
+their respective terms. See [NOTICE](NOTICE) for attribution and boundaries.
+The package's private flag prevents accidental npm publication; this repository
+is public and may be consumed from source.
