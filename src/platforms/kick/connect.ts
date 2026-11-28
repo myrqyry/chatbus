@@ -82,10 +82,39 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
   };
 
   const polls=createKickPollTracker({channelName:channel.channelName,channelId:channel.channelId??String(channel.chatroomId)});
+  const retiredStreams=new Set<string>();
+  let streamId:string|undefined,streamLive:boolean|undefined;
+  const retire=(id:string|undefined)=>{
+    if(!id)return;retiredStreams.add(id);
+    if(retiredStreams.size>32)retiredStreams.delete(retiredStreams.values().next().value!);
+  };
+  const acceptStream=(event:ChatEvent)=>{
+    if(event.type!=='stream-online'&&event.type!=='stream-offline')return true;
+    const id=(event.data as {streamId?:string}|undefined)?.streamId,live=event.type==='stream-online';
+    if(id&&retiredStreams.has(id))return false;
+    if(live===streamLive&&id===streamId)return false;
+    if(!live&&streamLive&&streamId&&id&&streamId!==id)return false;
+    if(streamLive&&streamId!==id)retire(streamId);
+    if(!live)retire(id);
+    streamId=id;streamLive=live;return true;
+  };
+  // Reuse the channel lookup already performed; an absent field is unknown,
+  // only an explicit null or a valid livestream record establishes state.
+  const raw=channel.raw;
+  const initial=raw&&typeof raw==='object'&&'livestream' in raw?raw.livestream:undefined;
+  const snapshotTime=Date.now();
+  let snapshotPending=true;
+  const emitSnapshot=()=>{
+    if(!snapshotPending||closed)return;snapshotPending=false;
+    if(streamLive!==undefined)return;
+    const context={channelName:channel.channelName,channelId:channel.channelId??String(channel.chatroomId),now:()=>snapshotTime};
+    const snapshot=initial===null?{channelName:context.channelName,channelId:context.channelId,type:'stream-offline' as const,platform:'kick' as const,timestamp:snapshotTime,data:{source:'kick-native'}}:normalizeKickEvent({type:'StreamerIsLive',data:{livestream:initial}},context);
+    if(snapshot&&acceptStream(snapshot))receiveRealtime({...snapshot,origin:'replay'});
+  };
   const socket = createKickSocket(channel.chatroomId, {
     ...options.socket,
     channelId: channel.channelId,
-    onStateChange: options.onStateChange,
+    onStateChange: state=>{options.onStateChange?.(state);if(state==='connected')emitSnapshot();},
     onError: options.onError,
     onMessage: (frame) => {
       const parsed = parseKickPusherFrame(frame);
@@ -95,7 +124,7 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
         channelId: channel.channelId ?? String(channel.chatroomId),
         emotes: options.getEmotes?.() ?? options.emotes,
       });
-      if (event) receiveRealtime(event);
+      if (event && acceptStream(event)) receiveRealtime(event);
     },
   });
 

@@ -26,6 +26,7 @@ export function createKickTransportArbiter(options:KickTransportBinding&{now?:()
   switch(event.type){
    case 'message':case 'user-ban':case 'user-timeout':return nativeConnected?'native':'official';
    case 'subscription':return coverage.has('channel.subscription.new')&&coverage.has('channel.subscription.renewal')?'official':nativeConnected?'native':'official';
+   case 'stream-online':case 'stream-offline':return coverage.has('livestream.status.updated')?'official':nativeConnected?'native':'official';
    case 'reward-redemption':return coverage.has('channel.reward.redemption.updated')?'official':nativeConnected?'native':'official';
    case 'gift-subscription':return coverage.has('channel.subscription.gifts')?'official':nativeConnected?'native':'official';
    case 'donation':if(isKickGift(event))return coverage.has('kicks.gifted')?'official':nativeConnected?'native':'official';return null;
@@ -47,7 +48,8 @@ export function createKickTransportArbiter(options:KickTransportBinding&{now?:()
      event.type==='subscription'&&coverage.has('channel.subscription.new')&&coverage.has('channel.subscription.renewal')||
      event.type==='gift-subscription'&&coverage.has('channel.subscription.gifts')||
      isKickGift(event)&&coverage.has('kicks.gifted')||
-     event.type==='reward-redemption'&&coverage.has('channel.reward.redemption.updated')
+     event.type==='reward-redemption'&&coverage.has('channel.reward.redemption.updated')||
+     (event.type==='stream-online'||event.type==='stream-offline')&&coverage.has('livestream.status.updated')
    ))return null;
    if(event.type==='message'&&event.message){
     const id=event.message.id,current=now();

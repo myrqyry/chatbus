@@ -249,6 +249,17 @@ export function normalizeKickEvent(
           event: event.data,
         },
       };
+    case 'StreamerIsLive':
+    case 'StopStreamBroadcast': {
+      const stream=event.data.livestream;
+      if(!isRecord(stream))return null;
+      const numericId=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>0?String(v):typeof v==='string'&&/^[1-9][0-9]{0,19}$/.test(v)?v:undefined;
+      const streamId=numericId(stream.id),owner=stream.channel_id,nestedOwner=isRecord(stream.channel)?stream.channel.id:undefined;
+      if(!streamId||(!numericId(owner)&&!numericId(nestedOwner)))return null;
+      for(const value of [owner,nestedOwner])if(value!==undefined&&(!numericId(value)||context.channelId&&numericId(value)!==context.channelId))return null;
+      const live=event.type==='StreamerIsLive';
+      return {...base,type:live?'stream-online':'stream-offline',data:{source:'kick-native',streamId,title:live&&typeof stream.session_title==='string'?stream.session_title.trim().slice(0,200):undefined}};
+    }
     case 'StreamHost':
       return { ...base, type: 'system', data: { kind: 'host', ...event.data } };
     case 'UserUnbanned':

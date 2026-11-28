@@ -135,6 +135,8 @@ export interface KickProtocolDataByType {
   ChannelSubscription: KickChannelSubscriptionPayload;
   LuckyGiftedSubscriptions: KickLuckyGiftedSubscriptionsPayload;
   StreamHost: KickStreamHostPayload;
+  StreamerIsLive: {livestream?:unknown};
+  StopStreamBroadcast: {livestream?:unknown};
   MessageDeleted: KickMessageDeletedPayload;
   UserBanned: KickUserBannedPayload;
   UserUnbanned: KickUserUnbannedPayload;

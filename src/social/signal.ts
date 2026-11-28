@@ -37,6 +37,7 @@ export interface SocialSignalV1 {
   /** Optional typed, bounded provider evidence; not raw event payloads. */
   hypeTrain?: {id:string;phase:HypeTrainPhase;level:number;total:number;progress?:number;goal?:number;expiresAtMs?:number};
   engagement?: EngagementEvidence;
+  stream?:{live:boolean;id?:string;title?:string;startedAtMs?:number;endedAtMs?:number};
   pin?: {phase:'set'|'remove';messageId?:string;text?:string;username?:string;pinnedBy?:string;expiresAtMs?:number};
   subscription?:{phase:'start'|'resub'|'gift'|'end';gift?:boolean;anonymous?:boolean;months?:number;streakMonths?:number;durationMonths?:number;expiresAtMs?:number;quote?:string};
   cheer?:{anonymous?:boolean;quote?:string};
@@ -229,6 +230,12 @@ export function toSocialSignal(
     ...(boundedText(gift.tier,64)?{tier:boundedText(gift.tier,64)}:{}),...(boundedText(gift.quote,240)?{quote:boundedText(gift.quote,240)}:{}),
     ...(nonnegativeCount(gift.pinnedSeconds)!==undefined?{pinnedSeconds:nonnegativeCount(gift.pinnedSeconds)}:{})
   }:undefined;
+  const stream:SocialSignalV1['stream']=event.type==='stream-online'||event.type==='stream-offline'?{
+    live:event.type==='stream-online',...(boundedText(data.streamId,128)?{id:boundedText(data.streamId,128)}:{}),
+    ...(boundedText(data.title,200)?{title:boundedText(data.title,200)}:{}),
+    ...(dateMs(data.startedAt)!==undefined?{startedAtMs:dateMs(data.startedAt)}:{}),
+    ...(dateMs(data.endedAt)!==undefined?{endedAtMs:dateMs(data.endedAt)}:{})
+  }:undefined;
   const pinId=boundedText(data.messageId,128),pinText=boundedText(data.text,500),pinUser=boundedText(data.username,64);
   const pin:SocialSignalV1['pin']=event.platform==='kick'?
     event.type==='message-pin'&&pinId&&pinText&&pinUser?{phase:'set',messageId:pinId,text:pinText,username:pinUser,...(boundedText(data.pinnedBy,64)?{pinnedBy:boundedText(data.pinnedBy,64)}:{}),...(nonnegativeCount(data.expiresAtMs)!==undefined?{expiresAtMs:nonnegativeCount(data.expiresAtMs)}:{})}:
@@ -274,6 +281,7 @@ export function toSocialSignal(
     ...(adBreak?{adBreak}:{}),
     ...(engagement?{engagement}:{}),
     ...(pin?{pin}:{}),
+    ...(stream?{stream}:{}),
     ...(hypeTrain?{hypeTrain}:{}),
     ...(reward?{reward}:{}),
     ...(upstreamBatchId ? { upstreamBatchId } : {}),
