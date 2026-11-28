@@ -6,6 +6,7 @@ const REALTIME_BASE_URL='https://web.kick.com/api/v1/realtime';
 const PUSHER_VERSION='protocol=7&client=js&version=8.4.0&flash=false';
 const DEFAULT_INACTIVITY_TIMEOUT_MS=90_000;
 const WATCHDOG_INTERVAL_MS=5_000;
+const HANDSHAKE_TIMEOUT_MS=15_000;
 const MAX_RECONNECT_DELAY_MS=30_000;
 const TOKEN_REFRESH_MIN_MS=5_000;
 const TOKEN_REFRESH_LEAD_MS=15_000;
@@ -100,7 +101,10 @@ export function createKickSocket(
   let reconnectAttempts=0;
   let reconnectTimer:ReturnType<typeof setTimeout>|null=null;
   let watchdogTimer:ReturnType<typeof setInterval>|null=null;
-  let refreshTimer:ReturnType<typeof setTimeout>|null;
+  let refreshTimer:ReturnType<typeof setTimeout>|null=null;
+  let handshakeTimer:ReturnType<typeof setTimeout>|null=null;
+  let ready=false;
+  const clearHandshake=()=>{if(handshakeTimer!==null){clearTimeout(handshakeTimer);handshakeTimer=null;}};
   let requestController:AbortController|null=null;
   let lastActivityAt=Date.now();
   let inactivityTimeoutMs=options.inactivityTimeoutMs??DEFAULT_INACTIVITY_TIMEOUT_MS;
@@ -110,6 +114,7 @@ export function createKickSocket(
   let awaiting=new Set<string>();
 
   const clearTimers=()=>{
+    clearHandshake();
     if(reconnectTimer!==null){clearTimeout(reconnectTimer);reconnectTimer=null;}
     if(watchdogTimer!==null){clearInterval(watchdogTimer);watchdogTimer=null;}
     if(refreshTimer!==null){clearTimeout(refreshTimer);refreshTimer=null;}
@@ -128,6 +133,7 @@ export function createKickSocket(
   };
 
   const markConnected=()=>{
+    if(ready)return;ready=true;clearHandshake();
     reconnectAttempts=0;
     options.onStateChange?.('connected');
     options.onOpen?.();
@@ -186,11 +192,13 @@ export function createKickSocket(
         options.onError?.(new Error(
           'Kick Centrifugo '+request.kind+' failed'+(typeof code==='number'?` (code ${code})`:''),
         ));
-        if(request.kind!=='subscribe')socket?.close();
+        socket?.close();
+        return;
         continue;
       }
       if(request.kind==='connect'){
         const reply=isRecord(frame.connect)?frame.connect:null;
+        if(!reply){socket?.close();return;}
         const ping=reply&&typeof reply.ping==='number'&&reply.ping>0?reply.ping:25;
         inactivityTimeoutMs=Math.max(
           options.inactivityTimeoutMs??DEFAULT_INACTIVITY_TIMEOUT_MS,
@@ -207,8 +215,8 @@ export function createKickSocket(
         return;
       }
       if(request.kind==='subscribe'&&request.channel){
-        awaiting.delete(request.channel);
-        if(awaiting.size===0)markConnected();
+        if(!isRecord(frame.subscribe)){socket?.close();return;}
+        if(awaiting.delete(request.channel)&&awaiting.size===0)markConnected();
         continue;
       }
       if(request.kind==='refresh'){
@@ -247,10 +255,10 @@ export function createKickSocket(
     if(envelope.event==='pusher:ping'){send({event:'pusher:pong',data:{}});return;}
     if(envelope.event==='pusher:pong')return;
     if(envelope.event==='pusher_internal:subscription_succeeded'&&typeof envelope.channel==='string'){
-      awaiting.delete(envelope.channel);
-      if(awaiting.size===0)markConnected();
+      if(awaiting.delete(envelope.channel)&&awaiting.size===0)markConnected();
       return;
     }
+    if(envelope.event==='pusher:error'||envelope.event==='pusher:subscription_error'){options.onError?.(new Error('Kick Pusher subscription or connection rejected'));socket?.close();return;}
     if(envelope.event.startsWith('pusher:')||envelope.event.startsWith('pusher_internal:'))return;
     options.onMessage?.(data);
   };
@@ -272,7 +280,13 @@ export function createKickSocket(
       scheduleReconnect();
       return;
     }
-    socket=current;
+    socket=current;ready=false;clearHandshake();
+    handshakeTimer=setTimeout(()=>{
+      handshakeTimer=null;
+      if(stopped||socket!==current||currentGeneration!==generation||ready)return;
+      options.onError?.(new Error('Kick realtime handshake timed out before all subscriptions were acknowledged'));
+      current.close();
+    },HANDSHAKE_TIMEOUT_MS);
     current.onopen=()=>{
       if(stopped||socket!==current||currentGeneration!==generation)return;
       lastActivityAt=Date.now();
@@ -294,8 +308,11 @@ export function createKickSocket(
       current.close();
     };
     current.onclose=()=>{
-      if(socket===current)socket=null;
-      if(stopped){options.onStateChange?.('disconnected');return;}
+      if(socket!==current||currentGeneration!==generation)return;
+      socket=null;ready=false;clearHandshake();
+      if(refreshTimer!==null){clearTimeout(refreshTimer);refreshTimer=null;}
+      requestController?.abort();
+      if(stopped)return;
       pending.clear();
       awaiting.clear();
       scheduleReconnect();

@@ -334,4 +334,43 @@ describe('Kick socket lifecycle', () => {
     expect(MockWebSocket.instances[0]!.url).not.toContain('32cbd69e4b950bf97679');
     handle.close();
   });
+  it('reconnects if subscription acknowledgements never finish despite ongoing heartbeats',async()=>{
+    const states:string[]=[],errors:Error[]=[];
+    const handle=createKickSocket(42,{appKey:'fixture',channelId:'99',onStateChange:s=>states.push(s),onError:e=>errors.push(e)});
+    try{
+      const ws=MockWebSocket.instances[0]!;
+      ws.emitMessage(JSON.stringify({event:'pusher:connection_established',data:'{}'}));
+      ws.emitMessage(JSON.stringify({event:'pusher_internal:subscription_succeeded',channel:'chatrooms.42.v2'}));
+      for(let n=0;n<3;n++){await vi.advanceTimersByTimeAsync(5000);ws.emitMessage(JSON.stringify({event:'pusher:ping'}));}
+      expect(ws.closeCount).toBe(1);
+      expect(states).not.toContain('connected');
+      expect(errors.some(e=>e.message.includes('handshake'))).toBe(true);
+      ws.emitClose();await vi.advanceTimersByTimeAsync(1000);
+      expect(MockWebSocket.instances).toHaveLength(2);
+      const next=MockWebSocket.instances[1]!;
+      next.emitMessage(JSON.stringify({event:'pusher:connection_established',data:'{}'}));
+      for(const row of next.sent.map(s=>JSON.parse(s)))next.emitMessage(JSON.stringify({event:'pusher_internal:subscription_succeeded',channel:row.data.channel}));
+      expect(states.at(-1)).toBe('connected');
+      // Duplicate or foreign acknowledgements do not signal a new connection.
+      const count=states.length;
+      next.emitMessage(JSON.stringify({event:'pusher_internal:subscription_succeeded',channel:'unrequested'}));
+      expect(states).toHaveLength(count);
+      await vi.advanceTimersByTimeAsync(15000);expect(next.closeCount).toBe(0);
+    }finally{handle.close();}
+  });
+  it('retries an explicitly rejected Centrifugo subscription rather than waiting for heartbeats forever',async()=>{
+    const handle=createKickSocket(42,{channelId:'99'});
+    try{
+      await vi.waitFor(()=>expect(MockWebSocket.instances).toHaveLength(1));
+      const ws=MockWebSocket.instances[0]!;ws.emitOpen();
+      const connect=JSON.parse(ws.sent[0]!);
+      ws.emitMessage(JSON.stringify({id:connect.id,connect:{ping:25}}));
+      const sub=JSON.parse(ws.sent[1]!);
+      ws.emitMessage(JSON.stringify({id:sub.id,error:{code:103}}));
+      expect(ws.closeCount).toBe(1);
+      ws.emitClose();await vi.advanceTimersByTimeAsync(1000);
+      await vi.waitFor(()=>expect(MockWebSocket.instances).toHaveLength(2));
+    }finally{handle.close();}
+  });
+
 });
