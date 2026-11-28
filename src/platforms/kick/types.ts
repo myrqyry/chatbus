@@ -109,7 +109,8 @@ export interface KickPollUpdatePayload {
 }
 
 export interface KickPollDeletePayload {
-  poll_id?: string;
+  id?: string | number;
+  poll_id?: string | number;
 }
 
 export interface KickProtocolDataByType {

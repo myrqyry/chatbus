@@ -5,6 +5,7 @@ import { fetchKickRecentMessages } from './history';
 import type { ChatEvent } from '../../types/chat';
 import { parseKickPusherFrame } from './protocol';
 import { createKickSocket } from './socket';
+import { createKickPollTracker } from './polls';
 
 export async function connectKickChat(options: KickConnectOptions): Promise<KickChatConnection> {
   const channelName = options.channel.trim();
@@ -74,6 +75,7 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
     for (const event of buffered.splice(0)) deliver(event);
   };
 
+  const polls=createKickPollTracker({channelName:channel.channelName,channelId:channel.channelId??String(channel.chatroomId)});
   const socket = createKickSocket(channel.chatroomId, {
     ...options.socket,
     channelId: channel.channelId,
@@ -82,7 +84,7 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
     onMessage: (frame) => {
       const parsed = parseKickPusherFrame(frame);
       if (!parsed) return;
-      const event = normalizeKickEvent(parsed, {
+      const event = parsed.type==='PollUpdate'||parsed.type==='PollDelete'?polls.receive(parsed):normalizeKickEvent(parsed, {
         channelName: channel.channelName,
         channelId: channel.channelId ?? String(channel.chatroomId),
         emotes: options.getEmotes?.() ?? options.emotes,

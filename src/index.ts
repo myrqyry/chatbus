@@ -383,3 +383,5 @@ export {normalizeKickOfficialEvent,KICK_OFFICIAL_EVENTS} from './platforms/kick/
 export type {KickOfficialEventType} from './platforms/kick/official-events';
 export {createKickTransportArbiter} from './platforms/kick/arbitration';
 export type {KickTransportBinding,KickTransportArbiter} from './platforms/kick/arbitration';
+
+export {createKickPollTracker} from './platforms/kick/polls';
