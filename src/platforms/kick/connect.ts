@@ -36,6 +36,7 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
   const buffered: ChatEvent[] = [];
   const maxBufferedEvents = 500;
   const seenMessageIds = new Set<string>();
+  const seenGiftTransactions = new Set<string>();
   const remember = (id: string) => {
     seenMessageIds.add(id);
     while (seenMessageIds.size > 500) {
@@ -49,6 +50,11 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
     const id = event.type === 'message' ? event.message?.id : undefined;
     if (id && seenMessageIds.has(id)) return;
     if (id) remember(id);
+    if (event.type==='donation'&&event.id) {
+      if (seenGiftTransactions.has(event.id)) return;
+      seenGiftTransactions.add(event.id);
+      if (seenGiftTransactions.size>2048) seenGiftTransactions.delete(seenGiftTransactions.values().next().value!);
+    }
     options.onEvent(event);
   };
   const receiveRealtime = (event: ChatEvent) => {

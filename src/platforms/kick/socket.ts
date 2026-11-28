@@ -75,7 +75,8 @@ const centrifugoChannels=(chatroomId:number,channelId?:string):string[]=>[
 
 const pusherChannels=(chatroomId:number,channelId?:string):string[]=>[
   `chatrooms.${chatroomId}.v2`,
-  ...(channelId?[`channel.${channelId}`]:[]),
+  `chatroom_${chatroomId}`,
+  ...(channelId?[`channel.${channelId}`,`channel_${channelId}`]:[]),
 ];
 
 export function kickReconnectDelay(attempt:number):number{

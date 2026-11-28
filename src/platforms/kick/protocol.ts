@@ -4,6 +4,8 @@ const EVENT_NAME_TO_TYPE: Record<string, keyof KickProtocolDataByType> = {
   'App\\Events\\ChatMessageEvent': 'ChatMessage',
   'App\\Events\\SubscriptionEvent': 'Subscription',
   'App\\Events\\GiftedSubscriptionsEvent': 'GiftedSubscriptions',
+  'GiftedSubscriptionsEvent': 'GiftedSubscriptions',
+  'KicksGifted': 'KicksGifted',
   'App\\Events\\ChannelSubscriptionEvent': 'ChannelSubscription',
   'App\\Events\\LuckyUsersWhoGotGiftSubscriptionsEvent': 'LuckyGiftedSubscriptions',
   'App\\Events\\StreamHostEvent': 'StreamHost',
@@ -50,7 +52,7 @@ export function parseKickPusherFrame(frame: string): KickProtocolEvent | null {
   if (!isRecord(envelope) || typeof envelope.event !== 'string') return null;
 
   const type = EVENT_NAME_TO_TYPE[envelope.event];
-  if (!type) return null;
+  if (!Object.hasOwn(EVENT_NAME_TO_TYPE, envelope.event) || !type) return null;
 
   const rawData = typeof envelope.data === 'string' ? parseJson(envelope.data) : envelope.data;
   if (!isRecord(rawData) || !isValidPayload(type, rawData)) return null;

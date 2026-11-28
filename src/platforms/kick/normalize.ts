@@ -196,6 +196,21 @@ export function normalizeKickEvent(
           : undefined,
         data: { giftedUsernames: event.data.gifted_usernames ?? [],subscriptionPhase:'gift',...(Array.isArray(event.data.gifted_usernames)&&event.data.gifted_usernames.length&&event.data.gifted_usernames.every(n=>typeof n==='string'&&n.trim())?{count:event.data.gifted_usernames.length}:{}) },
       };
+    case 'KicksGifted': {
+      const {gift_transaction_id:transaction,sender,gift,message,created_at}=event.data;
+      const text=(v:unknown,max:number)=>typeof v==='string'&&v.trim()&&v.length<=max?v.trim():undefined;
+      if(!text(transaction,128)||!isRecord(sender)||!isRecord(gift))return null;
+      const username=text(sender.username,64);
+      const userId=typeof sender.id==='number'&&Number.isSafeInteger(sender.id)&&sender.id>0?String(sender.id):text(sender.id,128);
+      const amount=gift.amount;
+      if(!username||!userId||typeof amount!=='number'||!Number.isSafeInteger(amount)||amount<=0)return null;
+      return {
+        ...base,id:text(transaction,128),type:'donation',
+        timestamp:timestampFrom(typeof created_at==='string'?created_at:undefined,now),
+        user:{platform:'kick',id:userId,username,displayName:username,...(text(sender.username_color,16)?{color:text(sender.username_color,16)}:{})},
+        data:{source:'kick-native',kickGift:{amount,name:text(gift.name,100),type:text(gift.type,64),tier:text(gift.tier,64),quote:typeof message==='string'?message.slice(0,240):undefined}},
+      };
+    }
     case 'ChannelSubscription':
       return {
         ...base,

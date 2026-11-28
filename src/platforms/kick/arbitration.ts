@@ -21,11 +21,13 @@ export function createKickTransportArbiter(options:KickTransportBinding&{now?:()
  let nativeConnected=false,coverage=new Set<KickOfficialEventType>();
  const seen=new Map<string,number>();
  const maxAge=600000,maxEntries=10000;
+ const isKickGift=(event:ChatEvent)=>event.type==='donation'&&event.data!==null&&typeof event.data==='object'&&'kickGift' in event.data&&Boolean(event.data.kickGift);
  const owner=(event:ChatEvent):'native'|'official'|null=>{
   switch(event.type){
    case 'message':case 'user-ban':case 'user-timeout':return nativeConnected?'native':'official';
    case 'subscription':return coverage.has('channel.subscription.new')&&coverage.has('channel.subscription.renewal')?'official':nativeConnected?'native':'official';
    case 'gift-subscription':return coverage.has('channel.subscription.gifts')?'official':nativeConnected?'native':'official';
+   case 'donation':if(isKickGift(event))return coverage.has('kicks.gifted')?'official':nativeConnected?'native':'official';return null;
    default:return null;
   }
  };
@@ -42,7 +44,8 @@ export function createKickTransportArbiter(options:KickTransportBinding&{now?:()
    if(transport==='official'&&preferred==='native')return null;
    if(transport==='native'&&preferred==='official'&&(
      event.type==='subscription'&&coverage.has('channel.subscription.new')&&coverage.has('channel.subscription.renewal')||
-     event.type==='gift-subscription'&&coverage.has('channel.subscription.gifts')
+     event.type==='gift-subscription'&&coverage.has('channel.subscription.gifts')||
+     isKickGift(event)&&coverage.has('kicks.gifted')
    ))return null;
    if(event.type==='message'&&event.message){
     const id=event.message.id,current=now();

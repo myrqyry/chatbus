@@ -65,6 +65,15 @@ export interface KickLuckyGiftedSubscriptionsPayload {
   [key: string]: unknown;
 }
 
+/** Native Kicks purchase, distinct from a gifted subscription or monetary donation. */
+export interface KickNativeGiftPayload {
+  gift_transaction_id?: unknown;
+  sender?: unknown;
+  gift?: unknown;
+  message?: unknown;
+  created_at?: unknown;
+}
+
 export interface KickStreamHostPayload {
   chatroom_id?: number;
   optional_message?: string;
@@ -107,6 +116,7 @@ export interface KickProtocolDataByType {
   ChatMessage: KickChatMessagePayload;
   Subscription: KickSubscriptionPayload;
   GiftedSubscriptions: KickGiftedSubscriptionsPayload;
+  KicksGifted: KickNativeGiftPayload;
   ChannelSubscription: KickChannelSubscriptionPayload;
   LuckyGiftedSubscriptions: KickLuckyGiftedSubscriptionsPayload;
   StreamHost: KickStreamHostPayload;
