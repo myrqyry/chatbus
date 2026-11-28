@@ -286,6 +286,9 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
       if (isServerReconnect) return;
       subscriptionState.clear();activeSubscriptionTypes.clear();
       const seen=new Set<string>();hydrationSeen=seen;
+      if(options.broadcasterEvents&&options.hydrateBroadcasterState&&auth.userId===channel.id){
+        options.onEvent({type:'broadcast-state-reset',platform:'twitch',channelId:channel.id,channelName:channel.login,timestamp:Date.now(),origin:'replay'});
+      }
       const subscriptions = await subscribeTwitchChat(session.id, channel.id, auth, {
         subscriptions: requestedSubscriptions,
         signal: requestController.signal,

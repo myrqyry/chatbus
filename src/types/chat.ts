@@ -177,6 +177,7 @@ export type ChatEventType =
   | 'subscription-end'
   | 'reward-update'
   | 'reward-catalog'
+  | 'broadcast-state-reset'
   | 'gift-subscription'
   | 'cheer'
   | 'raid'
