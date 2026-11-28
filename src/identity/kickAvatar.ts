@@ -1,10 +1,9 @@
-import { fetchJson } from '../network/fetch';
+import {loadKickChannelMetadata} from '../platforms/kick/channel-metadata';
 
 /**
  * Public Kick channel owner's profile picture.
  * The web-client channel endpoint is undocumented; failure is optional enrichment.
  */
-const CHANNEL_URL = 'https://kick.com/api/v2/channels/';
 const SUCCESS_TTL_MS = 30 * 60_000;
 const FAILURE_TTL_MS = 60_000;
 const MAX_CACHE_ENTRIES = 256;
@@ -45,7 +44,7 @@ export function fetchKickUserAvatar(channel:string):Promise<string|null> {
   const inflight=pending.get(slug);
   if(inflight)return inflight;
 
-  const task=fetchJson<unknown>(CHANNEL_URL+encodeURIComponent(slug))
+  const task=loadKickChannelMetadata(slug)
     .then(result=>{
       if(!result || typeof result!=='object' || Array.isArray(result))return null;
       const user=(result as {user?:unknown}).user;

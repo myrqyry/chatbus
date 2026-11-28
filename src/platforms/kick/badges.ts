@@ -5,6 +5,7 @@
  * this module is framework-neutral and does not infer arbitrary role icons.
  */
 import type { Badge, BadgeRef } from '../../types/identity';
+import {fetchBoundedKickChannelJson,loadKickChannelMetadata} from './channel-metadata';
 import {loadKickRoleArtwork} from './role-artwork';
 import {sanitizeKickRoleBody,kickRoleArtworkKey,type KickRoleBodies} from './role-svg';
 
@@ -13,7 +14,6 @@ export type KickBadgeCatalogState='idle'|'loading'|'ready'|'degraded';
 type JsonFetcher=(url:string)=>Promise<unknown>;
 const TTL_MS=15*60*1000;
 const FAILURE_COOLDOWN_MS=60*1000;
-const MAX_RESPONSE_BYTES=1_000_000;
 const CHANNEL=/^[a-z0-9_-]{1,48}$/i;
 const IMAGE=/^https:\/\/files\.kick\.com\/channel_subscriber_badges\/\d+\/conversion\/[a-z0-9_-]+\.(?:png|webp)$/i;
 const isRecord=(value:unknown):value is Record<string,unknown>=>
@@ -76,28 +76,8 @@ export function parseKickUserBadgesV2(payload:unknown):Badge[] {
 
 /** Bound the source size and duration: even malformed provider JSON must not delay chat. */
 export async function fetchKickChannelBadgeJson(url:string):Promise<unknown> {
-  const response=await fetch(url,{signal:AbortSignal.timeout(8000),headers:{Accept:'application/json'}});
-  if(!response.ok)throw new Error('Kick badge catalog HTTP '+response.status);
-  const advertised=Number(response.headers.get('content-length'));
-  if(advertised>MAX_RESPONSE_BYTES)throw new Error('Kick badge catalog exceeded maximum size');
-  // Streaming cap also protects against absent/untruthful Content-Length.
-  const reader=response.body?.getReader();
-  if(!reader)throw new Error('Kick badge catalog had no response body');
-  const chunks:Uint8Array[]=[];
-  let total=0;
-  try {
-    while(true){
-      const {done,value}=await reader.read();
-      if(done)break;
-      total+=value.byteLength;
-      if(total>MAX_RESPONSE_BYTES)throw new Error('Kick badge catalog exceeded maximum size');
-      chunks.push(value);
-    }
-  } finally {await reader.cancel().catch(()=>{});}
-  const bytes=new Uint8Array(total);
-  let offset=0;
-  for(const part of chunks){bytes.set(part,offset);offset+=part.byteLength;}
-  return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+  const slug=/^https:\/\/kick\.com\/api\/v2\/channels\/([a-z0-9_-]{1,48})$/i.exec(url)?.[1];
+  return slug?loadKickChannelMetadata(slug):fetchBoundedKickChannelJson(url);
 }
 
 /** One catalog per channel owner/session; stale channels cannot overwrite current art. */

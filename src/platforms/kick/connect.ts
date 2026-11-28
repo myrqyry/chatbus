@@ -152,7 +152,7 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
     cancelRefresh();
     const controller=new AbortController();refreshController=controller;
     const revision=streamRevision,timestamp=Date.now();
-    void resolver(channelName,controller.signal).then(resolved=>{
+    void (options.resolveChannel?resolver(channelName,controller.signal):resolveKickChannel(channelName,{signal:controller.signal,fresh:true})).then(resolved=>{
       if(closed||controller.signal.aborted||refreshController!==controller||revision!==streamRevision)return;
       if(resolved.channelName.toLowerCase()!==channel.channelName.toLowerCase()||resolved.channelId!==channel.channelId||resolved.chatroomId!==channel.chatroomId)return;
       emitSnapshot(resolved,timestamp);
