@@ -4,14 +4,29 @@ import { normalizeKickEvent } from './normalize';
 import { fetchKickRecentMessages } from './history';
 import type { ChatEvent } from '../../types/chat';
 import { parseKickPusherFrame } from './protocol';
-import { createKickSocket } from './socket';
+import { createKickSocket,kickReconnectDelay } from './socket';
+import {HttpError,isAbortError} from '../../network/fetch';
 import { createKickPollTracker } from './polls';
 
+const abortError=()=>new DOMException('The operation was aborted.','AbortError');
+const retryable=(e:unknown)=>e instanceof HttpError?e.status===408||e.status===429||e.status>=500:e instanceof TypeError||isAbortError(e);
+function retryWait(ms:number,signal?:AbortSignal){
+ return new Promise<void>((resolve,reject)=>{
+  if(signal?.aborted){reject(abortError());return;}
+  const cleanup=()=>signal?.removeEventListener('abort',cancel);
+  const timer=setTimeout(()=>{cleanup();resolve();},ms);
+  const cancel=()=>{clearTimeout(timer);cleanup();reject(abortError());};
+  signal?.addEventListener('abort',cancel,{once:true});
+ });
+}
 export async function connectKickChat(options: KickConnectOptions): Promise<KickChatConnection> {
   const channelName = options.channel.trim();
   if (!channelName) throw new Error('Kick channel name must not be empty');
 
+  if(options.signal?.aborted)throw abortError();
+  const resolver=options.resolveChannel??((name:string,signal?:AbortSignal)=>resolveKickChannel(name,{signal}));
   let channel: KickResolvedChannel;
+  let snapshotTime=Date.now();
   if (options.chatroomId !== undefined) {
     if (!Number.isInteger(options.chatroomId) || options.chatroomId <= 0) {
       throw new Error('Kick chatroom id must be a positive integer');
@@ -22,9 +37,19 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
       chatroomId: options.chatroomId,
     };
   } else {
-    const resolver = options.resolveChannel ?? ((name: string, signal?: AbortSignal) =>
-      resolveKickChannel(name, { signal }));
-    channel = await resolver(channelName, options.signal);
+    let attempts=0;
+    for(;;){
+      if(options.signal?.aborted)throw abortError();
+      try{snapshotTime=Date.now();channel=await resolver(channelName,options.signal);break;}
+      catch(error){
+        if(options.signal?.aborted)throw abortError();
+        if(!options.retryInitialLookup||!retryable(error))throw error;
+        options.onStateChange?.('reconnecting');
+        options.onError?.(error instanceof Error?error:new Error('Kick channel lookup failed'));
+        const delay=kickReconnectDelay(Math.min(attempts++,5));
+        await retryWait(error instanceof HttpError&&error.status===429?Math.max(30000,delay):delay,options.signal);
+      }
+    }
   }
 
   if (options.signal?.aborted) {
@@ -98,23 +123,47 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
     if(!live)retire(id);
     streamId=id;streamLive=live;return true;
   };
-  // Reuse the channel lookup already performed; an absent field is unknown,
-  // only an explicit null or a valid livestream record establishes state.
-  const raw=channel.raw;
-  const initial=raw&&typeof raw==='object'&&'livestream' in raw?raw.livestream:undefined;
-  const snapshotTime=Date.now();
-  let snapshotPending=true;
-  const emitSnapshot=()=>{
-    if(!snapshotPending||closed)return;snapshotPending=false;
-    if(streamLive!==undefined)return;
-    const context={channelName:channel.channelName,channelId:channel.channelId??String(channel.chatroomId),now:()=>snapshotTime};
-    const snapshot=initial===null?{channelName:context.channelName,channelId:context.channelId,type:'stream-offline' as const,platform:'kick' as const,timestamp:snapshotTime,data:{source:'kick-native'}}:normalizeKickEvent({type:'StreamerIsLive',data:{livestream:initial}},context);
-    if(snapshot&&acceptStream(snapshot))receiveRealtime({...snapshot,origin:'replay'});
+  // Reuse the initial lookup. On later ready handshakes refresh just once,
+  // never interpret a transport disconnect as a broadcaster going offline.
+  let snapshotPending=true,streamRevision=0;
+  let refreshController:AbortController|undefined;
+  const cancelRefresh=()=>{refreshController?.abort();refreshController=undefined;};
+  const emitSnapshot=(resolved:KickResolvedChannel,timestamp:number)=>{
+    const raw=resolved.raw;
+    const value=raw&&typeof raw==='object'&&'livestream' in raw?raw.livestream:undefined;
+    const context={channelName:channel.channelName,channelId:channel.channelId??String(channel.chatroomId),now:()=>timestamp};
+    const snapshot:ChatEvent|null=value===null?{channelName:context.channelName,channelId:context.channelId,type:'stream-offline',platform:'kick',timestamp,data:{source:'kick-native'}}:normalizeKickEvent({type:'StreamerIsLive',data:{livestream:value}},context);
+    if(!snapshot)return;
+    const id=(snapshot.data as {streamId?:string}|undefined)?.streamId;
+    // A fresh same-state snapshot is useful to viewers that lost state.
+    if(snapshot.type==='stream-online'&&id&&retiredStreams.has(id))return;
+    if(streamLive&&streamId!==id)retire(streamId);
+    streamLive=snapshot.type==='stream-online';streamId=id;
+    receiveRealtime({...snapshot,origin:'replay'});
+  };
+  const onConnected=()=>{
+    if(closed||options.signal?.aborted)return;
+    if(snapshotPending){
+      snapshotPending=false;
+      if(streamLive===undefined)emitSnapshot(channel,snapshotTime);
+      return;
+    }
+    if(options.chatroomId!==undefined&&!options.resolveChannel)return;
+    cancelRefresh();
+    const controller=new AbortController();refreshController=controller;
+    const revision=streamRevision,timestamp=Date.now();
+    void resolver(channelName,controller.signal).then(resolved=>{
+      if(closed||controller.signal.aborted||refreshController!==controller||revision!==streamRevision)return;
+      if(resolved.channelName.toLowerCase()!==channel.channelName.toLowerCase()||resolved.channelId!==channel.channelId||resolved.chatroomId!==channel.chatroomId)return;
+      emitSnapshot(resolved,timestamp);
+    }).catch(()=>{/* Optional status refresh must not interrupt chat. */}).finally(()=>{
+      if(refreshController===controller)refreshController=undefined;
+    });
   };
   const socket = createKickSocket(channel.chatroomId, {
     ...options.socket,
     channelId: channel.channelId,
-    onStateChange: state=>{options.onStateChange?.(state);if(state==='connected')emitSnapshot();},
+    onStateChange: state=>{if(state!=='connected')cancelRefresh();options.onStateChange?.(state);if(state==='connected')onConnected();},
     onError: options.onError,
     onMessage: (frame) => {
       const parsed = parseKickPusherFrame(frame);
@@ -124,7 +173,10 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
         channelId: channel.channelId ?? String(channel.chatroomId),
         emotes: options.getEmotes?.() ?? options.emotes,
       });
-      if (event && acceptStream(event)) receiveRealtime(event);
+      if (event && acceptStream(event)) {
+        if(event.type==='stream-online'||event.type==='stream-offline'){streamRevision++;cancelRefresh();}
+        receiveRealtime(event);
+      }
     },
   });
 
@@ -143,6 +195,7 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
     if (closed) return;
     closed = true;
     historyController.abort();
+    cancelRefresh();
     buffered.length = 0;
     socket.close();
   };

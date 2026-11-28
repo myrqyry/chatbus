@@ -50,7 +50,7 @@ export function createBrowserChatSource(config:{loadKickPublicTransport?:(signal
    };
    const pending=platform==='youtube'
     ?connectYouTubeChat({videoId:options.channel,apiKey:youtubeKey,apiKeyHeader:true,minPollMs:10000,emitInitialHistory:false,...callbacks})
-    :connectKickChat({...options,emitInitialHistory:false,socket:{resolvePublicPusher:config.loadKickPublicTransport??loadKickPublicTransport},...callbacks});
+    :connectKickChat({...options,retryInitialLookup:true,emitInitialHistory:false,socket:{resolvePublicPusher:config.loadKickPublicTransport??loadKickPublicTransport},...callbacks});
    void pending.then(connection=>{if(closed)connection.close();else active=connection;},error=>{
     if(closed)return;
     options.onStateChange?.('error');

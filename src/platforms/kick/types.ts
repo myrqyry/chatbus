@@ -188,6 +188,8 @@ export interface KickConnectOptions {
   /** Emit a bounded recent-chat snapshot before buffered realtime events. */
   emitInitialHistory?: boolean;
   initialHistoryLimit?: number;
+  /** Retry transient initial lookup failures until cancelled; permanent HTTP errors still reject. */
+  retryInitialLookup?: boolean;
   resolveChannel?: (channel: string, signal?: AbortSignal) => Promise<KickResolvedChannel>;
   socket?: Omit<KickSocketOptions, 'onOpen' | 'onMessage' | 'onClose' | 'onError' | 'onStateChange'>;
   onEvent: (event: ChatEvent) => void;
