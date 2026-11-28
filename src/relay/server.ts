@@ -186,3 +186,6 @@ export {createKickWebhookReceiver,fetchKickWebhookPublicKey,createKickWebhookKey
 export type {KickWebhookOptions,KickWebhookSubscription,KickWebhookResult,KickWebhookKeyCache} from '../platforms/kick/webhook';
 export {reconcileKickWebhookSubscriptions,removeKickWebhookSubscriptions} from '../platforms/kick/subscriptions';
 export type {KickSubscriptionOptions,KickRegisteredSubscription,KickRemoveSubscriptionOptions} from '../platforms/kick/subscriptions';
+
+export {openKickSqliteDeliveryStore} from '../platforms/kick/delivery-store';
+export type {KickDeliveryStore,KickDeliveryClaim,KickSqliteDeliveryStore} from '../platforms/kick/delivery-store';

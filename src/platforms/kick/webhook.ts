@@ -4,11 +4,14 @@ import {verify,createPublicKey,type KeyObject} from 'node:crypto';
 import {normalizeKickOfficialEvent,KICK_OFFICIAL_EVENTS} from './official-events';
 import type {ChatEvent} from '../../types/chat';
 import {HttpError} from '../../network/fetch';
+import type {KickDeliveryStore} from './delivery-store';
 export interface KickWebhookSubscription {type:string;version:string;broadcasterId:string}
 export type KickWebhookOptions = {
  resolveSubscription:(id:string)=>KickWebhookSubscription|undefined;
  onEvent:(event:ChatEvent)=>void|Promise<void>;
  now?:()=>number;
+ /** Optional durable, shared ledger; default remains process-local. */
+ deliveryStore?:KickDeliveryStore;
 } & ({getPublicKey:()=>Promise<KeyObject|string>;keyCache?:never}|{keyCache:KickWebhookKeyCache;getPublicKey?:never});
 
 export type KickWebhookResult='accepted'|'duplicate'|'invalid'|'unavailable';
@@ -72,7 +75,7 @@ export function createKickWebhookReceiver(options:KickWebhookOptions){
   const header=(name:string)=>{const v=headers[name];return typeof v==='string'&&v.length<=2048?v:undefined;};
   const messageId=header('kick-event-message-id'),time=header('kick-event-message-timestamp'),sig=header('kick-event-signature'),type=header('kick-event-type'),version=header('kick-event-version'),subId=header('kick-event-subscription-id');
   const at=time?Date.parse(time):NaN,current=now();
-  if(!messageId||!subId||!time||!sig||!type||version!=='1'||!KICK_OFFICIAL_EVENTS.some(t=>t===type)||!Number.isFinite(at)||current-at>maxAge||at-current>maxFuture||!body.length||body.length>256*1024||!/^[-A-Za-z0-9_]+$/.test(messageId)||!/^[A-Za-z0-9+/]+={0,2}$/.test(sig))return 'invalid';
+  if(!messageId||!subId||!time||!sig||!type||version!=='1'||!KICK_OFFICIAL_EVENTS.some(t=>t===type)||!Number.isFinite(at)||current-at>maxAge||at-current>maxFuture||!body.length||body.length>256*1024||!/^[-A-Za-z0-9_]{1,256}$/.test(messageId)||!/^[A-Za-z0-9+/]+={0,2}$/.test(sig))return 'invalid';
   const expected=options.resolveSubscription(subId);
   if(!expected||expected.type!==type||expected.version!==version)return 'invalid';
   let key:KeyObject|string;
@@ -87,6 +90,25 @@ export function createKickWebhookReceiver(options:KickWebhookOptions){
   let event:ChatEvent|null;
   try{event=normalizeKickOfficialEvent(type,JSON.parse(Buffer.from(body).toString('utf8')),{id:messageId,timestamp:at,broadcasterId:expected.broadcasterId});}catch{return 'invalid';}
   if(!event)return 'invalid';
+  // Authenticate before claiming; invalid requests cannot poison the ledger.
+  if(options.deliveryStore){
+   if(pending.has(messageId)||pending.size>=128)return 'unavailable';
+   pending.add(messageId);
+   const store=options.deliveryStore;
+   try{
+    const claimTime=now(),expiresAt=at+maxAge+1;
+    if(claimTime>=expiresAt)return 'invalid';
+    const claim=await store.claim(messageId,claimTime,expiresAt);
+    if(claim.status==='duplicate')return 'duplicate';
+    if(claim.status!=='claimed')return 'unavailable';
+    try{await options.onEvent(event);}catch{
+     await store.release(messageId,claim.token);return 'unavailable';
+    }
+    // If completion fails after a side effect, leave the claim to expire.
+    // Exactly-once effects require a transactional downstream sink.
+    return await store.complete(messageId,claim.token)?'accepted':'unavailable';
+   }catch{return 'unavailable';}finally{pending.delete(messageId);}
+  }
   for(const [id,expiry] of seen){if(expiry<current)seen.delete(id);else break;}
   if(seen.has(messageId))return 'duplicate';
   // In-flight retries must not be acknowledged until the original succeeded.

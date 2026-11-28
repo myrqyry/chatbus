@@ -64,3 +64,34 @@ Use one cache for the host rather than constructing it per request.
 Tests cover explicit scoped removal, readback, no-op, rotation, coalescing,
 refresh throttling and expired-key failure using fixtures. No live
 subscription mutation or public ingress is enabled.
+
+## Durable delivery ledger
+
+The optional server-only openKickSqliteDeliveryStore uses Node 24's built-in
+SQLite (no external dependency). The caller provides an owner-private
+directory and database file (0600). It persists delivery IDs, claim tokens,
+lease deadlines and completion status only, not payloads, user data, or
+credentials. Use one ledger for each app/receiver identity; the caller
+owns lifecycle and closes it after draining active deliveries.
+
+createKickWebhookReceiver accepts deliveryStore. Only authenticated,
+normalized events can claim an ID. The store atomically claims across
+database connections, reports completed IDs as duplicates, and rejects
+in-flight/capacity-limited claims as retryable unavailable. Defaults:
+60-second recovery lease and 20,000 retained records. Expired records are
+pruned on claim; completion retention covers the accepted signed timestamp
+window. SQLite transactions are short and synchronous, with a bounded
+100ms lock timeout. This is a local persistent-host adapter, not a shared
+serverless/multi-host store. The asynchronous store interface permits a
+different implementation on a hosted ingress.
+
+Delivery is at-least-once: after an acknowledged completion, duplicates
+are suppressed across restarts. A process crash after a sink side effect
+but before the durable completion commit can cause a retry, and a callback
+running longer than its lease can be reclaimed by a different receiver.
+Fencing protects the ledger from old claims, not arbitrary sink side
+effects. Hosts must use bounded callbacks and idempotent sinks (or a
+transactional inbox/outbox) for stronger guarantees. No public HTTP ingress
+or live subscriptions are enabled by this change. Tests use real SQLite
+files, close/reopen, separate database connections, signed fixtures, retry
+and permissions checks.
