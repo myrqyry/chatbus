@@ -258,6 +258,12 @@ const normalizeNotification = (
     type = 'raid';
   }
 
+  const detail = asRecord(event[noticeType.replace(/^shared_chat_/u, '')]) ?? asRecord(event[noticeType]);
+  const subTier = detail?.is_prime === true ? 'Prime' : stringValue(detail?.sub_tier);
+  const reportedCount = type === 'raid' ? detail?.viewer_count
+    : type === 'gift-subscription' && noticeType.replace(/^shared_chat_/u, '') === 'community_sub_gift' ? detail?.total
+    : undefined;
+  const count = typeof reportedCount === 'number' && Number.isSafeInteger(reportedCount) && reportedCount >= 0 ? reportedCount : undefined;
   const message = notificationMessage(event, envelope, context, user, channelId, channelName, timestamp);
   // Watch-streak and announcement notices can be the *only* delivery of a
   // viewer's real chat message. Route them through normal chat consumers while
@@ -279,6 +285,8 @@ const normalizeNotification = (
     data: {
       kind: 'chat-notification',
       noticeType,
+      ...(count !== undefined ? { count } : {}),
+      ...(subTier ? { sub_tier: subTier } : {}),
       systemMessage: stringValue(event.system_message),
       event,
     },

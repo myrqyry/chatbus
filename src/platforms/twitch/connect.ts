@@ -7,6 +7,8 @@ import { listEnabledTwitchEventSubSubscriptions } from './reconcile';
 import { createTwitchEventSubSocket } from './socket';
 import {
   DEFAULT_TWITCH_CHAT_SUBSCRIPTIONS,
+  TWITCH_FOLLOW_SUBSCRIPTIONS,TWITCH_REWARD_SUBSCRIPTIONS,TWITCH_HYPE_TRAIN_SUBSCRIPTIONS,
+  TWITCH_STATE_SUBSCRIPTIONS,TWITCH_SHARED_CHAT_SUBSCRIPTIONS,
   createTwitchEventSubSubscription,
   subscribeTwitchChat,
   twitchSubscriptionMissingScopeRequirements,
@@ -92,7 +94,12 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
       (auditIntervalMs > 0 && auditIntervalMs < 1_000)) {
     throw new RangeError('Twitch subscription reconciliation interval must be 0 or at least 1000ms');
   }
-  const requestedTypes = [...new Set(requestedSubscriptions)];
+  const optionalTypes = options.broadcasterEvents && auth.userId === channel.id
+    ? [...TWITCH_FOLLOW_SUBSCRIPTIONS,...TWITCH_REWARD_SUBSCRIPTIONS,...TWITCH_HYPE_TRAIN_SUBSCRIPTIONS,
+       ...TWITCH_STATE_SUBSCRIPTIONS,...TWITCH_SHARED_CHAT_SUBSCRIPTIONS]
+       .filter(type=>!requestedSubscriptions.includes(type)&&!twitchSubscriptionMissingScopeRequirements([type],auth.scopes??[]).length)
+    : [];
+  const requestedTypes = [...new Set([...requestedSubscriptions,...optionalTypes])];
   const requestController = new AbortController();
   const onAbortRequest = () => requestController.abort();
   options.signal?.addEventListener('abort', onAbortRequest, { once: true });
@@ -282,7 +289,19 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
       for (const subscription of subscriptions) {
         subscriptionState.set(subscriptionKey(subscription), subscription);
       }
-      reportSubscriptionState('subscribed');
+      // Establish the required chat subscriptions first. Denial of optional
+      // broadcaster events must not tear down a healthy chat connection.
+      const optional = await Promise.allSettled(optionalTypes.map(type=>
+        createTwitchEventSubSubscription(type,session.id,channel.id,auth,requestController.signal)));
+      if(stopped||requestController.signal.aborted||sessionId!==session.id)return;
+      let degraded=false;
+      for(let i=0;i<optional.length;i++){
+        const result=optional[i]!;
+        if(result.status==='fulfilled'&&result.value?.type===optionalTypes[i]&&result.value.status==='enabled'){
+          subscriptionState.set(subscriptionKey(result.value),result.value);
+        }else degraded=true;
+      }
+      reportSubscriptionState(degraded?'degraded':'subscribed');
       startAudit();
     },
   });

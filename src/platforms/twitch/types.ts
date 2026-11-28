@@ -219,6 +219,8 @@ export interface TwitchConnectOptions {
   userId?: string;
   broadcasterUserId?: string;
   subscriptions?: TwitchEventSubSubscriptionType[];
+  /** Opt in to eligible read-only events for the authenticated broadcaster. */
+  broadcasterEvents?: boolean;
   /** Authoritative Twitch EventSub session audit cadence; 0 disables; default five minutes. */
   subscriptionReconcileIntervalMs?: number;
   emotes?: EmoteSet;

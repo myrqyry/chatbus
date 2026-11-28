@@ -43,10 +43,13 @@ describe('Twitch EventSub subscription reconciliation', () => {
   let changes: TwitchSubscriptionStateChange[];
   let inspect: (url: URL) => Response | Promise<Response>;
   let onPost: (type: string) => Response | Promise<Response>;
+  let authenticatedId:string;
+  let grantedScopes:string[];
 
   beforeEach(() => {
     vi.useFakeTimers();
     TestSocket.instances = [];
+    authenticatedId='user-1';grantedScopes=['user:read:chat'];
     stored = selected.map((s) => record(s));
     posts = [];
     gets = [];
@@ -58,7 +61,7 @@ describe('Twitch EventSub subscription reconciliation', () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
       if (url.hostname === 'id.twitch.tv') return new Response(JSON.stringify({
-        client_id: 'client-1', user_id: 'user-1', login: 'bot', scopes: ['user:read:chat'],
+        client_id: 'client-1', user_id: authenticatedId, login: 'bot', scopes: grantedScopes,
       }), { status: 200 });
       if (url.pathname === '/helix/users') return new Response(JSON.stringify({
         data: [{ id: '10', login: 'host', display_name: 'Host' }],
@@ -84,10 +87,10 @@ describe('Twitch EventSub subscription reconciliation', () => {
     vi.unstubAllGlobals();
   });
 
-  const start = async () => {
+  const start = async (broadcasterEvents=false) => {
     const connection = await connectTwitchChat({
       channel: 'host', accessToken: 'token', loadCheermotes: false,
-      subscriptions: [...selected], subscriptionReconcileIntervalMs: 10_000,
+      subscriptions: [...selected], broadcasterEvents, subscriptionReconcileIntervalMs: 10_000,
       onEvent: () => {},
       onError: (error) => errors.push(error),
       onSubscriptionStateChange: (change) => changes.push(change),
@@ -97,6 +100,25 @@ describe('Twitch EventSub subscription reconciliation', () => {
     await vi.advanceTimersByTimeAsync(0);
     return connection;
   };
+
+  it('opts into only eligible broadcaster events and isolates optional subscription denial from chat',async()=>{
+    authenticatedId='10';grantedScopes.push('moderator:read:followers','channel:read:redemptions');
+    onPost=type=>new Response(JSON.stringify(type==='channel.follow'?{message:'Denied'}:{data:[record(type)]}),{status:type==='channel.follow'?403:202});
+    const connection=await start(true);
+    expect(posts).toContain('channel.follow');
+    expect(posts).toContain('channel.channel_points_custom_reward_redemption.add');
+    expect(posts).toContain('stream.online');
+    expect(posts).not.toContain('channel.hype_train.begin');
+    expect(connection.subscriptions().map(s=>s.type)).toEqual(expect.arrayContaining([...selected,'stream.online','channel.channel_points_custom_reward_redemption.add']));
+    expect(connection.subscriptions().some(s=>s.type==='channel.follow')).toBe(false);
+    expect(changes.at(-1)?.reason).toBe('degraded');
+    expect(TestSocket.instances[0]?.closeCount).toBe(0);
+  });
+  it('never broadens the default chat connection or requests broadcaster-owned events for other channels',async()=>{
+    grantedScopes.push('channel:read:redemptions','moderator:read:followers','channel:read:hype_train');
+    await start(true);
+    expect(posts).toEqual([...selected]);
+  });
 
   it('checks the authoritative active session and recreates a silently missing type while the socket stays healthy', async () => {
     const connection = await start();

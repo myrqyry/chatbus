@@ -264,8 +264,14 @@ export function normalizeTwitchIrcFrame(
         : noticeType === 'raid' ? 'raid'
           : ['viewermilestone', 'announcement'].includes(noticeType) && text ? 'message' : 'system';
     const viewers = maybeInt(tags['msg-param-viewerCount']);
+    const reportedCount = type === 'raid' ? viewers
+      : noticeType === 'submysterygift' ? maybeInt(tags['msg-param-mass-gift-count']) : undefined;
+    const count = reportedCount !== undefined && reportedCount >= 0 ? reportedCount : undefined;
+    const subTier = optionalTag(tags, 'msg-param-sub-plan');
     return { ...base, id, type, user, message,
       data: { kind: 'chat-notification', noticeType, systemMessage: optionalTag(tags, 'system-msg'),
+        ...(count !== undefined ? { count } : {}),
+        ...((type === 'subscription' || type === 'gift-subscription') && subTier ? { sub_tier: subTier } : {}),
         ...(noticeType === 'raid' && viewers !== undefined ? { viewers } : {}) } };
   }
   const bits = maybeInt(tags.bits);

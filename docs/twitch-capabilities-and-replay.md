@@ -92,3 +92,17 @@ renderChatEvent(replay);
 `createTestChatEvent()` and `createTestMessageEvent()` use deterministic defaults (`timestamp: 0`, stable IDs) so fixtures do not change between runs. `replayChatEvent()` marks the event with `origin: 'replay'`; generated fixtures use `origin: 'test'`. `chatEventOrigin()` treats an older event with no explicit origin as live.
 
 `serializeChatEvent()`, `deserializeChatEvent()`, `serializeChatEvents()`, and `deserializeChatEvents()` provide JSON round-tripping with basic envelope validation. The recorder is only an in-memory bounded ring buffer; persistence remains an application decision so `Chatbus` stays framework- and storage-neutral.
+
+### Broadcaster event opt-in
+
+`connectTwitchChat({broadcasterEvents: true, ...})` requests eligible optional
+follow, custom reward, Hype Train, stream/channel state and shared-chat
+subscriptions only when the resolved broadcaster ID equals the validated
+token's user ID. Missing optional scopes are skipped. Denied optional
+subscriptions report degraded state without tearing down required chat
+subscriptions; reconciliation inspects only the requested types and current
+session. Default chat and explicit strict subscription lists are unchanged.
+Twitch chat notifications now project nested raid viewer counts, community
+gift batch counts and source-supplied subscription tier/Prime evidence into
+the existing social signal fields; anonymous IRC tags provide the same
+fields when available. Lifetime gift totals are not event counts.
