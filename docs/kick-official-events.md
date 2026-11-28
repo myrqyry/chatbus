@@ -37,3 +37,30 @@ no public webhook, periodic scheduling, live subscription mutation or
 transport arbitration is enabled. Current API contract confirmed against
 https://api.kick.com/swagger/doc.yaml and KickDevDocs. Key retrieval is
 live-verified; registration/reconciliation tests use fixtures.
+
+## Subscription removal and signing key cache
+
+Server hosts may explicitly call removeKickWebhookSubscriptions with an app
+access token, broadcaster ID and selected subscription IDs. It inventories
+first, intersects those IDs with the broadcaster's webhook registrations,
+uses repeated id query parameters for DELETE, requires HTTP 204, then
+reads back the inventory. Missing or foreign IDs are not deleted; remaining
+IDs are reported rather than falsely marked removed. An inventory failure
+prevents a write. Serialize this with creation/reconciliation in the host.
+An explicit ID must belong to the caller's authorized app and broadcaster;
+the host must enforce its own account/tenant authorization and ownership
+policy. No automatic deletion, live calls, or UI disconnect wiring yet.
+
+The server receiver accepts a shared createKickWebhookKeyCache instance.
+Defaults: one-hour TTL and 30-second minimum refresh interval. Concurrent
+loads coalesce, mismatched signatures can trigger a refresh and one
+verification retry, and expired keys are not used when refresh fails.
+A new key replaces the previous key, without a previous-key grace period.
+Mismatches during cooldown may be rejected until refresh is allowed;
+hosts should monitor rejection/refresh failures. The existing injected
+getPublicKey path is preserved for explicitly managed keys.
+Cache state is per process, in memory, with no background timer.
+Use one cache for the host rather than constructing it per request.
+Tests cover explicit scoped removal, readback, no-op, rotation, coalescing,
+refresh throttling and expired-key failure using fixtures. No live
+subscription mutation or public ingress is enabled.

@@ -46,3 +46,40 @@ export async function reconcileKickWebhookSubscriptions(options:KickSubscription
  }
  return {active,missing:missing(active)};
 }
+
+export interface KickRemoveSubscriptionOptions {
+ appAccessToken:string;
+ broadcasterId:string;
+ /** Explicit IDs only; never infer removal from absence in a desired list. */
+ ids:readonly string[];
+ fetcher?:typeof fetch;
+ signal?:AbortSignal;
+}
+/** Inventory-gated, broadcaster-scoped deletion with readback. */
+export async function removeKickWebhookSubscriptions(options:KickRemoveSubscriptionOptions):Promise<{removed:string[];notOwned:string[];remaining:string[]}>{
+ const broadcaster=Number(options.broadcasterId);
+ if(!Number.isSafeInteger(broadcaster)||broadcaster<=0||String(broadcaster)!==options.broadcasterId||!options.appAccessToken.trim())throw Error('Invalid Kick subscription authorization');
+ const ids=[...new Set(options.ids)];
+ if(ids.length>100||ids.some(id=>typeof id!=='string'||!/^[-A-Za-z0-9_]{1,128}$/.test(id)))throw Error('Invalid Kick subscription IDs');
+ if(!ids.length)return {removed:[],notOwned:[],remaining:[]};
+ const fetcher=options.fetcher??fetch;
+ const request=async(method:'GET'|'DELETE',target:string)=>{
+  const timeout=AbortSignal.timeout(5000),signal=options.signal?AbortSignal.any([timeout,options.signal]):timeout;
+  const r=await fetcher(target,{method,headers:{Authorization:'Bearer '+options.appAccessToken},signal,redirect:'error'});
+  if(!r.ok)throw new HttpError(r.status,url);
+  return r;
+ };
+ const inventory=async()=>{
+  const payload:unknown=await (await request('GET',url+'?broadcaster_user_id='+broadcaster)).json();
+  const rows=(payload as {data?:unknown})?.data;
+  if(!Array.isArray(rows)||rows.length>100000)throw Error('Invalid Kick subscriptions response');
+  return new Set(rows.filter(r=>r&&typeof r==='object'&&r.broadcaster_user_id===broadcaster&&r.method==='webhook'&&typeof r.id==='string').map(r=>r.id as string));
+ };
+ const before=await inventory(),owned=ids.filter(id=>before.has(id)),notOwned=ids.filter(id=>!before.has(id));
+ if(!owned.length)return {removed:[],notOwned,remaining:[]};
+ const params=new URLSearchParams();for(const id of owned)params.append('id',id);
+ const response=await request('DELETE',url+'?'+params);
+ if(response.status!==204)throw Error('Unexpected Kick deletion response');
+ const after=await inventory();
+ return {removed:owned.filter(id=>!after.has(id)),notOwned,remaining:owned.filter(id=>after.has(id))};
+}

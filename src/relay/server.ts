@@ -182,7 +182,7 @@ export function attachLocalKickRelay(options: LocalKickRelayOptions) {
   };
 }
 
-export {createKickWebhookReceiver,fetchKickWebhookPublicKey} from '../platforms/kick/webhook';
-export type {KickWebhookOptions,KickWebhookSubscription,KickWebhookResult} from '../platforms/kick/webhook';
-export {reconcileKickWebhookSubscriptions} from '../platforms/kick/subscriptions';
-export type {KickSubscriptionOptions,KickRegisteredSubscription} from '../platforms/kick/subscriptions';
+export {createKickWebhookReceiver,fetchKickWebhookPublicKey,createKickWebhookKeyCache} from '../platforms/kick/webhook';
+export type {KickWebhookOptions,KickWebhookSubscription,KickWebhookResult,KickWebhookKeyCache} from '../platforms/kick/webhook';
+export {reconcileKickWebhookSubscriptions,removeKickWebhookSubscriptions} from '../platforms/kick/subscriptions';
+export type {KickSubscriptionOptions,KickRegisteredSubscription,KickRemoveSubscriptionOptions} from '../platforms/kick/subscriptions';

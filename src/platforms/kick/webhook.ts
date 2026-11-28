@@ -5,12 +5,12 @@ import {normalizeKickOfficialEvent,KICK_OFFICIAL_EVENTS} from './official-events
 import type {ChatEvent} from '../../types/chat';
 import {HttpError} from '../../network/fetch';
 export interface KickWebhookSubscription {type:string;version:string;broadcasterId:string}
-export interface KickWebhookOptions {
- getPublicKey:()=>Promise<KeyObject|string>;
+export type KickWebhookOptions = {
  resolveSubscription:(id:string)=>KickWebhookSubscription|undefined;
  onEvent:(event:ChatEvent)=>void|Promise<void>;
  now?:()=>number;
-}
+} & ({getPublicKey:()=>Promise<KeyObject|string>;keyCache?:never}|{keyCache:KickWebhookKeyCache;getPublicKey?:never});
+
 export type KickWebhookResult='accepted'|'duplicate'|'invalid'|'unavailable';
 export async function fetchKickWebhookPublicKey(fetcher:typeof fetch=fetch):Promise<string>{
  const url='https://api.kick.com/public/v1/public-key';
@@ -33,6 +33,37 @@ export async function fetchKickWebhookPublicKey(fetcher:typeof fetch=fetch):Prom
  if(createPublicKey(key).asymmetricKeyType!=='rsa')throw Error('Kick public key is not RSA');
  return key.trim();
 }
+export interface KickWebhookKeyCache {
+ get():Promise<KeyObject>;
+ /** A mismatched signature may trigger at most one refresh per cooldown. */
+ refreshAfterMismatch(key:KeyObject):Promise<KeyObject>;
+}
+export function createKickWebhookKeyCache(options:{load?:()=>Promise<KeyObject|string>;now?:()=>number;ttlMs?:number;refreshCooldownMs?:number}={}):KickWebhookKeyCache{
+ const now=options.now??Date.now,load=options.load??fetchKickWebhookPublicKey;
+ const ttl=options.ttlMs??3600000,cooldown=options.refreshCooldownMs??30000;
+ if(!Number.isFinite(ttl)||ttl<=0||!Number.isFinite(cooldown)||cooldown<=0)throw Error('Invalid Kick key cache policy');
+ let key:KeyObject|undefined,expires=0,nextAttempt=0,inFlight:Promise<KeyObject>|undefined;
+ const refresh=():Promise<KeyObject>=>{
+  if(inFlight)return inFlight;
+  if(now()<nextAttempt)return Promise.reject(Error('Kick key refresh throttled'));
+  nextAttempt=now()+cooldown;
+  inFlight=Promise.resolve().then(()=>load()).then(value=>{
+   const parsed=typeof value==='string'?createPublicKey(value):value;
+   if(parsed.type!=='public'||parsed.asymmetricKeyType!=='rsa')throw Error('Invalid Kick RSA public key');
+   key=parsed;expires=now()+ttl;return parsed;
+  }).finally(()=>{inFlight=undefined;});
+  return inFlight;
+ };
+ return {
+  get(){return key&&now()<expires?Promise.resolve(key):refresh();},
+  refreshAfterMismatch(used){
+   if(key&&key!==used&&now()<expires)return Promise.resolve(key);
+   if(inFlight)return inFlight;
+   if(now()<nextAttempt&&key&&now()<expires)return Promise.resolve(key);
+   return refresh();
+  }
+ };
+}
 export function createKickWebhookReceiver(options:KickWebhookOptions){
  const now=options.now??Date.now,seen=new Map<string,number>(),pending=new Set<string>();
  const maxAge=600000,maxFuture=30000,maxEntries=20000;
@@ -45,8 +76,14 @@ export function createKickWebhookReceiver(options:KickWebhookOptions){
   const expected=options.resolveSubscription(subId);
   if(!expected||expected.type!==type||expected.version!==version)return 'invalid';
   let key:KeyObject|string;
-  try{key=await options.getPublicKey();}catch{return 'unavailable';}
-  try{if(!verify('RSA-SHA256',Buffer.concat([Buffer.from(messageId+'.'+time+'.'),body]),key,Buffer.from(sig,'base64')))return 'invalid';}catch{return 'invalid';}
+  try{key=options.keyCache?await options.keyCache.get():await options.getPublicKey();}catch{return 'unavailable';}
+  const signed=Buffer.concat([Buffer.from(messageId+'.'+time+'.'),body]),signature=Buffer.from(sig,'base64');
+  const matches=(candidate:KeyObject|string)=>{try{return verify('RSA-SHA256',signed,candidate,signature);}catch{return false;}};
+  if(!matches(key)){
+   if(!options.keyCache||typeof key==='string')return 'invalid';
+   try{key=await options.keyCache.refreshAfterMismatch(key);}catch{return 'unavailable';}
+   if(!matches(key))return 'invalid';
+  }
   let event:ChatEvent|null;
   try{event=normalizeKickOfficialEvent(type,JSON.parse(Buffer.from(body).toString('utf8')),{id:messageId,timestamp:at,broadcasterId:expected.broadcasterId});}catch{return 'invalid';}
   if(!event)return 'invalid';
