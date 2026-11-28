@@ -1,9 +1,9 @@
 /** Server-only: verify raw bytes before parsing, then bind delivery to the
  * host's known subscription and broadcaster. Never publish a key or token. */
-import {verify,type KeyObject} from 'node:crypto';
+import {verify,createPublicKey,type KeyObject} from 'node:crypto';
 import {normalizeKickOfficialEvent,KICK_OFFICIAL_EVENTS} from './official-events';
 import type {ChatEvent} from '../../types/chat';
-import {fetchJson} from '../../network/fetch';
+import {HttpError} from '../../network/fetch';
 export interface KickWebhookSubscription {type:string;version:string;broadcasterId:string}
 export interface KickWebhookOptions {
  getPublicKey:()=>Promise<KeyObject|string>;
@@ -12,11 +12,26 @@ export interface KickWebhookOptions {
  now?:()=>number;
 }
 export type KickWebhookResult='accepted'|'duplicate'|'invalid'|'unavailable';
-export async function fetchKickWebhookPublicKey():Promise<string>{
- const body=await fetchJson<{data?:{public_key?:unknown}}>('https://api.kick.com/public/v1/public-key',{},5000,0);
- const key=body.data?.public_key;
- if(typeof key!=='string'||key.length>8192||!key.includes('BEGIN PUBLIC KEY'))throw Error('Kick public key unavailable');
- return key;
+export async function fetchKickWebhookPublicKey(fetcher:typeof fetch=fetch):Promise<string>{
+ const url='https://api.kick.com/public/v1/public-key';
+ const response=await fetcher(url,{signal:AbortSignal.timeout(5000),redirect:'error'});
+ if(!response.ok)throw new HttpError(response.status,url);
+ const reader=response.body?.getReader();
+ if(!reader)throw Error('Kick public key unavailable');
+ const chunks:Uint8Array[]=[];let size=0;
+ try{
+  while(true){
+   const {done,value}=await reader.read();if(done)break;
+   size+=value.byteLength;if(size>16384){await reader.cancel();throw Error('Kick public key response too large');}
+   chunks.push(value);
+  }
+ }finally{reader.releaseLock();}
+ const body=Buffer.concat(chunks).toString('utf8').trim();
+ let key:unknown=body;
+ if(body.startsWith('{'))key=JSON.parse(body)?.data?.public_key;
+ if(typeof key!=='string'||key.length>8192||!key.trim().startsWith('-----BEGIN PUBLIC KEY-----'))throw Error('Kick public key unavailable');
+ if(createPublicKey(key).asymmetricKeyType!=='rsa')throw Error('Kick public key is not RSA');
+ return key.trim();
 }
 export function createKickWebhookReceiver(options:KickWebhookOptions){
  const now=options.now??Date.now,seen=new Map<string,number>(),pending=new Set<string>();

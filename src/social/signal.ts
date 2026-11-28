@@ -37,9 +37,9 @@ export interface SocialSignalV1 {
   /** Optional typed, bounded provider evidence; not raw event payloads. */
   hypeTrain?: {id:string;phase:HypeTrainPhase;level:number;total:number;progress?:number;goal?:number;expiresAtMs?:number};
   engagement?: EngagementEvidence;
-  subscription?:{phase:'start'|'resub'|'gift'|'end';gift?:boolean;anonymous?:boolean;months?:number;streakMonths?:number;durationMonths?:number;quote?:string};
+  subscription?:{phase:'start'|'resub'|'gift'|'end';gift?:boolean;anonymous?:boolean;months?:number;streakMonths?:number;durationMonths?:number;expiresAtMs?:number;quote?:string};
   cheer?:{anonymous?:boolean;quote?:string};
-  reward?: {id?:string;title?:string;cost?:number;input?:string;kind?:'automatic'|'power-up'|'custom-power-up';type?:string;status?:string;redemptionId?:string;enabled?:boolean};
+  reward?: {id?:string;title?:string;cost?:number;input?:string;kind?:'automatic'|'power-up'|'custom-power-up';type?:string;status?:string;redemptionId?:string;enabled?:boolean;redeemedAtMs?:number;description?:string};
   shoutout?:{direction:'sent'|'received';channelId:string;channelName:string;displayName?:string};
   adBreak?:{durationSeconds?:number;startedAtMs?:number;automatic?:boolean};
   charityDonation?:{campaignId?:string;name?:string};
@@ -131,12 +131,14 @@ function hypeEvidence(data:Record<string,unknown>):SocialSignalV1['hypeTrain'] {
   return {id,phase,level,total,...(progress!==undefined?{progress}:{}),...(goal!==undefined&&goal>0?{goal}:{}),
     ...(Number.isSafeInteger(expiry)&&expiry>=0?{expiresAtMs:expiry}:{})};
 }
+const dateMs=(v:unknown):number|undefined=>{const n=typeof v==='string'?Date.parse(v):NaN;return Number.isSafeInteger(n)&&n>=0?n:undefined;};
 function rewardEvidence(data:Record<string,unknown>):SocialSignalV1['reward'] {
   const reward=record(data.reward),id=boundedText(reward.id,128),title=boundedText(reward.title,100),
     cost=nonnegativeCount(reward.cost),input=boundedText(data.userInput,240);
   const type=boundedText(reward.type,64),kind=reward.kind;
   const status=boundedText(data.status,32),redemptionId=boundedText(data.redemptionId,128);
-  const evidence:NonNullable<SocialSignalV1['reward']>={...(status?{status}:{}),...(redemptionId?{redemptionId}:{}),...(typeof reward.is_enabled==='boolean'?{enabled:reward.is_enabled}:{}),...(type?{type}:{}),...(kind==='automatic'||kind==='power-up'||kind==='custom-power-up'?{kind}:{}),...(id?{id}:{}),...(title?{title}:{}),...(cost!==undefined?{cost}:{}),...(input?{input}:{})};
+  const redeemedAtMs=dateMs(data.redeemedAt),description=boundedText(reward.description,512);
+  const evidence:NonNullable<SocialSignalV1['reward']>={...(redeemedAtMs!==undefined?{redeemedAtMs}:{}),...(description?{description}:{}),...(status?{status}:{}),...(redemptionId?{redemptionId}:{}),...(typeof reward.is_enabled==='boolean'?{enabled:reward.is_enabled}:{}),...(type?{type}:{}),...(kind==='automatic'||kind==='power-up'||kind==='custom-power-up'?{kind}:{}),...(id?{id}:{}),...(title?{title}:{}),...(cost!==undefined?{cost}:{}),...(input?{input}:{})};
   return Object.keys(evidence).length?evidence:undefined;
 }
 
@@ -215,9 +217,10 @@ export function toSocialSignal(
   }:undefined;
   const reward=['reward-redemption','reward-update','reward-catalog'].includes(event.type)?rewardEvidence(data):undefined;
   const phase=data.subscriptionPhase,months=nonnegativeCount(data.months),streakMonths=nonnegativeCount(data.streakMonths),durationMonths=nonnegativeCount(data.durationMonths),quote=boundedText(data.quote,240);
+  const expiresAtMs=dateMs(data.expiresAt);
   const subscription:SocialSignalV1['subscription']=['subscription','gift-subscription','subscription-received','subscription-end'].includes(event.type)&&(phase==='start'||phase==='resub'||phase==='gift'||phase==='end')?{
     phase,...(typeof data.gift==='boolean'?{gift:data.gift}:{}),...(typeof data.anonymous==='boolean'?{anonymous:data.anonymous}:{}),
-    ...(months!==undefined?{months}:{}),...(streakMonths!==undefined?{streakMonths}:{}),...(durationMonths!==undefined?{durationMonths}:{}),...(quote?{quote}:{}),
+    ...(months!==undefined?{months}:{}),...(streakMonths!==undefined?{streakMonths}:{}),...(durationMonths!==undefined?{durationMonths}:{}),...(expiresAtMs!==undefined?{expiresAtMs}:{}),...(quote?{quote}:{}),
   }:undefined;
   const gift=record(data.kickGift),giftAmount=nonnegativeCount(gift.amount);
   const kickGift:SocialSignalV1['kickGift']=event.platform==='kick'&&event.type==='donation'&&giftAmount!==undefined&&giftAmount>0?{
