@@ -95,3 +95,38 @@ transactional inbox/outbox) for stronger guarantees. No public HTTP ingress
 or live subscriptions are enabled by this change. Tests use real SQLite
 files, close/reopen, separate database connections, signed fixtures, retry
 and permissions checks.
+
+## Isolated HTTP ingress
+
+createKickWebhookIngress composes the server receiver, shared key cache,
+durable delivery store, and host-owned subscription registry on a separate
+127.0.0.1-only HTTP listener. Only POST /webhooks/kick is accepted; there
+are no control-room, OAuth, browser, or subscription-management routes.
+The host supplies authorized API-readback rows to
+createKickSubscriptionRegistry; replaceBroadcaster atomically replaces only
+one broadcaster's inventory, rejecting conflicting IDs. The registry is
+in memory and must be reconstructed from trusted inventory after restart.
+Never accept registry entries from a webhook request or browser caller.
+
+The listener verifies the original bytes (no parsing, decompression, or
+body reserialization before signature verification). It rejects duplicate
+security/content headers, non-JSON or encoded content, bodies above 256 KiB,
+and unexpected paths/methods. Bounds: 16 KiB headers, 10s absolute body-read
+deadline, 15s HTTP request timeout, 128 connections, default 32 concurrent
+deliveries (configurable to 128). Returns empty 204 for accepted or
+acknowledged duplicate, 400 for invalid delivery, 413 for oversized body,
+415 for unsupported content, 503 with Retry-After for retryable failure.
+Shutdown stops admission and drains callbacks before the host closes its
+ledger. Callbacks must be bounded; a stalled callback delays shutdown.
+
+For deployment use a separately configured HTTPS reverse proxy routing
+only the exact webhook path to this listener; preserve raw body bytes,
+reject duplicate headers at the proxy, enforce connection/body limits,
+and never route the local control room. TLS, host auth/tenant lifecycle,
+persistent registry hydration, periodic reconciliation, cross-host
+idempotency, and live transport ownership remain host responsibilities.
+The public endpoint is not deployed or registered by this library.
+Seven tests exercised real loopback HTTP, generated RSA signatures and
+SQLite, including chunked oversize, callback failure/retry, duplicate
+headers, registry isolation and drain behavior. This is not evidence of
+actual Kick-originated delivery.

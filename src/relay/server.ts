@@ -189,3 +189,5 @@ export type {KickSubscriptionOptions,KickRegisteredSubscription,KickRemoveSubscr
 
 export {openKickSqliteDeliveryStore} from '../platforms/kick/delivery-store';
 export type {KickDeliveryStore,KickDeliveryClaim,KickSqliteDeliveryStore} from '../platforms/kick/delivery-store';
+export {createKickWebhookIngress,createKickSubscriptionRegistry} from '../platforms/kick/webhook-ingress';
+export type {KickWebhookIngressOptions,KickSubscriptionRegistry} from '../platforms/kick/webhook-ingress';
