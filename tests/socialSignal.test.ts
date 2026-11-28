@@ -89,3 +89,20 @@ describe('Chatbus social signal v1', () => {
     expect(() => toSocialSignal(message, { receivedAtMs: -1 })).toThrow('receivedAtMs');
   });
 });
+
+describe('bounded broadcast event evidence',()=>{
+  it('projects Hype Train snapshots without exposing raw payload or inventing progress',()=>{
+    const base:ChatEvent={type:'hype-train',platform:'twitch',timestamp:100,channelId:'1',data:{id:'train',phase:'progress',level:3,total:400,progress:50,goal:200,expiresAt:'2026-11-27T23:00:00Z',topContributions:[{username:'private'}],token:'secret'}};
+    const signal=toSocialSignal(base,{receivedAtMs:200});
+    expect(signal.hypeTrain).toEqual({id:'train',phase:'progress',level:3,total:400,progress:50,goal:200,expiresAtMs:Date.parse('2026-11-27T23:00:00Z')});
+    expect(JSON.stringify(signal)).not.toContain('secret');
+    expect(toSocialSignal({...base,data:{id:'train',phase:'end',level:4,total:800}}).hypeTrain).toEqual({id:'train',phase:'end',level:4,total:800});
+    expect(toSocialSignal({...base,data:{id:'train',phase:'progress',level:-1,total:400}}).hypeTrain).toBeUndefined();
+  });
+  it('projects a reward ID, title, cost and user input separately from chat messages',()=>{
+    const signal=toSocialSignal({type:'reward-redemption',platform:'twitch',timestamp:100,data:{reward:{id:'reward-1',title:'Pick a song',cost:500,prompt:'secret'},userInput:'Play jazz'}});
+    expect(signal.reward).toEqual({id:'reward-1',title:'Pick a song',cost:500,input:'Play jazz'});
+    expect(signal.message).toBeUndefined();
+    expect(JSON.stringify(signal)).not.toContain('secret');
+  });
+});

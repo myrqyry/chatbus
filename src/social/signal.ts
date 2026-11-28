@@ -1,4 +1,4 @@
-import type { ChatEvent, ChatEventType, ChatPlatform, ChatUser } from '../types/chat';
+import type { ChatEvent, ChatEventType, ChatPlatform, ChatUser, HypeTrainPhase } from '../types/chat';
 
 /** JSON-only evidence handoff to social consumers. Stable on the wire as v1. */
 export interface SocialSignalV1 {
@@ -34,6 +34,9 @@ export interface SocialSignalV1 {
     parentMessageId?: string;
     threadMessageId?: string;
   };
+  /** Optional typed, bounded provider evidence; not raw event payloads. */
+  hypeTrain?: {id:string;phase:HypeTrainPhase;level:number;total:number;progress?:number;goal?:number;expiresAtMs?:number};
+  reward?: {id?:string;title?:string;cost?:number;input?:string};
   /** A source-provided correlation key, not proof of semantic equivalence. */
   upstreamBatchId?: string;
   /** Only explicitly recognized measurements; monetary amounts are NOT converted. */
@@ -62,6 +65,23 @@ const nonnegativeCount = (candidate: unknown): number | undefined =>
 const boundedText = (candidate: unknown, limit: number): string | undefined =>
   typeof candidate === 'string' && candidate.trim()
     ? candidate.trim().slice(0, limit) : undefined;
+
+const record = (value:unknown):Record<string,unknown> =>
+  value && typeof value==='object' && !Array.isArray(value) ? value as Record<string,unknown> : {};
+function hypeEvidence(data:Record<string,unknown>):SocialSignalV1['hypeTrain'] {
+  const id=boundedText(data.id,128),phase=data.phase,level=nonnegativeCount(data.level),total=nonnegativeCount(data.total);
+  if(!id||(phase!=='begin'&&phase!=='progress'&&phase!=='end')||level===undefined||level<1||total===undefined)return undefined;
+  const progress=nonnegativeCount(data.progress),goal=nonnegativeCount(data.goal);
+  const expiry=typeof data.expiresAt==='string'?Date.parse(data.expiresAt):NaN;
+  return {id,phase,level,total,...(progress!==undefined?{progress}:{}),...(goal!==undefined&&goal>0?{goal}:{}),
+    ...(Number.isSafeInteger(expiry)&&expiry>=0?{expiresAtMs:expiry}:{})};
+}
+function rewardEvidence(data:Record<string,unknown>):SocialSignalV1['reward'] {
+  const reward=record(data.reward),id=boundedText(reward.id,128),title=boundedText(reward.title,100),
+    cost=nonnegativeCount(reward.cost),input=boundedText(data.userInput,240);
+  const evidence={...(id?{id}:{}),...(title?{title}:{}),...(cost!==undefined?{cost}:{}),...(input?{input}:{})};
+  return Object.keys(evidence).length?evidence:undefined;
+}
 
 /** Known subscription tier only; never inferred from names, badges or prices. */
 function subscriptionTier(event: ChatEvent): string | undefined {
@@ -122,6 +142,8 @@ export function toSocialSignal(
   const upstreamBatchId = safeId(data.streamlabsEventId);
   const actor = fromUser(event.user ?? event.message?.user);
   const message = event.message;
+  const hypeTrain=event.type==='hype-train'?hypeEvidence(data):undefined;
+  const reward=event.type==='reward-redemption'?rewardEvidence(data):undefined;
   return {
     schemaVersion: 1,
     producer: 'chatbus',
@@ -155,6 +177,8 @@ export function toSocialSignal(
         threadMessageId: message.reply?.threadMessageId,
       } : {}),
     } } : {}),
+    ...(hypeTrain?{hypeTrain}:{}),
+    ...(reward?{reward}:{}),
     ...(upstreamBatchId ? { upstreamBatchId } : {}),
     ...(Object.keys(measurements).length ? { measurements } : {}),
   };
