@@ -1,5 +1,5 @@
-export { toSocialSignal } from './social/signal';
-export type { SocialSignalV1, SocialSignalOptions, EngagementEvidence } from './social/signal';
+export { toSocialSignal, formatMoneyEvidence } from './social/signal';
+export type { SocialSignalV1, SocialSignalOptions, EngagementEvidence, MoneyEvidence } from './social/signal';
 
 export type {
   Emote,
@@ -304,6 +304,7 @@ export {
   twitchSubscriptionScopeRequirements,
   TWITCH_FOLLOW_SUBSCRIPTIONS,
   TWITCH_ENGAGEMENT_SUBSCRIPTIONS,
+  TWITCH_CHARITY_SUBSCRIPTIONS,TWITCH_POWER_SUBSCRIPTIONS,
   TWITCH_HYPE_TRAIN_SUBSCRIPTIONS,
   TWITCH_SHARED_CHAT_SUBSCRIPTIONS,
   TWITCH_MODERATION_SUBSCRIPTIONS,
@@ -329,6 +330,7 @@ export type {
   TwitchEventSubSubscriptionType,
   TwitchFollowerSubscriptionType,
   TwitchEngagementSubscriptionType,
+  TwitchCharitySubscriptionType,TwitchPowerSubscriptionType,
   TwitchHypeTrainSubscriptionType,
   TwitchModerationSubscriptionType,
   TwitchRewardSubscriptionType,

@@ -320,9 +320,37 @@ export function normalizeTwitchEventSubNotification(
 
   const now = context.now?.() ?? Date.now();
   const timestamp = eventTimestamp(envelope.metadata.message_timestamp, now);
-  const channelId = stringValue(event.broadcaster_user_id);
-  const channelName = stringValue(event.broadcaster_user_login);
+  const channelId = stringValue(event.broadcaster_user_id) ?? (subscriptionType.startsWith('channel.charity_campaign.')?stringValue(event.broadcaster_id):undefined);
+  const channelName = stringValue(event.broadcaster_user_login) ?? (subscriptionType.startsWith('channel.charity_campaign.')?stringValue(event.broadcaster_login):undefined);
 
+  const charity=/^channel\.charity_campaign\.(start|progress|stop|donate)$/.exec(subscriptionType);
+  const rewardActor=():ChatUser|undefined=>{
+    const username=stringValue(event.user_login);
+    return username?{platform:'twitch',id:stringValue(event.user_id),username,displayName:stringValue(event.user_name)}:undefined;
+  };
+  if(charity){
+    if(!channelId||!stringValue(event.id))return null;
+    if(charity[1]==='donate')return {id:stringValue(event.id),type:'donation',platform:'twitch',channelId,channelName,timestamp,origin:'live',user:rewardActor(),data:{charityDonation:true,campaignId:stringValue(event.campaign_id),charityName:stringValue(event.charity_name),money:event.amount},raw:envelope};
+    const phase=charity[1]==='start'?'begin':charity[1]==='stop'?'end':'progress';
+    return {id:envelope.metadata.message_id,type:'charity',platform:'twitch',channelId,channelName,timestamp,origin:'live',data:{...event,phase},raw:envelope};
+  }
+  if(subscriptionType==='channel.channel_points_automatic_reward_redemption.add'||subscriptionType==='channel.bits.use'||subscriptionType==='channel.custom_power_up_redemption.add'){
+    if(!channelId)return null;
+    const automatic=subscriptionType==='channel.channel_points_automatic_reward_redemption.add';
+    const custom=subscriptionType==='channel.custom_power_up_redemption.add';
+    // Built-in paid power-ups arrive via Bits Use; cheers and custom power-ups
+    // already have separate owners. Never emit duplicate alert-family events.
+    if(!automatic&&!custom&&event.type!=='power_up')return null;
+    const details=asRecord(automatic?event.reward:custom?event.custom_power_up:event.power_up);
+    if(!details)return null;
+    const type=stringValue(details.type),kind=automatic?'automatic':custom?'custom-power-up':'power-up';
+    if(automatic&&(!type||['message_effect','gigantify_an_emote','celebration'].includes(type)))return null;
+    if(!automatic&&!custom&&!type)return null;
+    const bits=custom?(stringValue(event.user_id)?event.user_id===channelId?0:details.bits:undefined):automatic?undefined:event.bits;
+    return {id:stringValue(event.id)??envelope.metadata.message_id,type:'reward-redemption',platform:'twitch',channelId,channelName,timestamp,origin:'live',user:rewardActor(),
+      data:{reward:{id:custom?details.id:undefined,title:custom?details.title:undefined,type,kind,cost:automatic?details.channel_points:undefined},
+        bits,userInput:custom?event.user_input:asRecord(event.message)?.text},raw:envelope};
+  }
   const engagement=/^channel\.(poll|prediction|goal)\.(begin|progress|lock|end)$/.exec(subscriptionType);
   if(engagement){
     const kind=engagement[1] as 'poll'|'prediction'|'goal',phase=engagement[2];

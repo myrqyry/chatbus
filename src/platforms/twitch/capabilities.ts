@@ -1,5 +1,5 @@
 import type { ChatEventType } from '../../types/chat';
-import { TWITCH_SHARED_CHAT_SUBSCRIPTIONS,TWITCH_ENGAGEMENT_SUBSCRIPTIONS,twitchSubscriptionScopeRequirements } from './subscriptions';
+import { TWITCH_SHARED_CHAT_SUBSCRIPTIONS,TWITCH_ENGAGEMENT_SUBSCRIPTIONS,TWITCH_CHARITY_SUBSCRIPTIONS,TWITCH_POWER_SUBSCRIPTIONS,twitchSubscriptionScopeRequirements } from './subscriptions';
 
 export type TwitchCapabilityId =
   | 'chat'
@@ -9,7 +9,7 @@ export type TwitchCapabilityId =
   | 'hype-train'
   | 'followers'
   | 'rewards'
-  | 'moderation' | 'polls' | 'predictions' | 'goals';
+  | 'moderation' | 'polls' | 'predictions' | 'goals' | 'charity' | 'automatic-rewards' | 'power-ups';
 
 export type TwitchEventSubConditionKind = 'chat-user' | 'broadcaster' | 'moderator';
 
@@ -103,6 +103,15 @@ const engagementCapability=(id:'polls'|'predictions'|'goals',kind:'poll'|'predic
   })),
 });
 export const TWITCH_CAPABILITY_REGISTRY: Readonly<Record<TwitchCapabilityId, TwitchCapabilityDefinition>> = {
+  charity:{id:'charity',description:'Observe Twitch charity campaign and donation events.',subscriptions:TWITCH_CHARITY_SUBSCRIPTIONS.map(type=>({
+    type,version:'1',condition:'broadcaster',scopeRequirements:[scope('channel:read:charity')],normalizedEventTypes:[type.endsWith('.donate')?'donation':'charity'],
+  }))},
+  'automatic-rewards':{id:'automatic-rewards',description:'Observe automatic Channel Points redemptions (version 2).',subscriptions:[{
+    type:TWITCH_POWER_SUBSCRIPTIONS[0]!,version:'2',condition:'broadcaster',scopeRequirements:[scope('channel:read:redemptions','channel:manage:redemptions')],normalizedEventTypes:['reward-redemption'],
+  }]},
+  'power-ups':{id:'power-ups',description:'Observe paid built-in Power-ups and custom Power-up redemptions.',subscriptions:TWITCH_POWER_SUBSCRIPTIONS.slice(1).map(type=>({
+    type,version:'1',condition:'broadcaster',scopeRequirements:[scope('bits:read')],normalizedEventTypes:['reward-redemption'],
+  }))},
   polls:engagementCapability('polls','poll'),
   predictions:engagementCapability('predictions','prediction'),
   goals:engagementCapability('goals','goal'),

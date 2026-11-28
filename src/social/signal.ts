@@ -37,7 +37,8 @@ export interface SocialSignalV1 {
   /** Optional typed, bounded provider evidence; not raw event payloads. */
   hypeTrain?: {id:string;phase:HypeTrainPhase;level:number;total:number;progress?:number;goal?:number;expiresAtMs?:number};
   engagement?: EngagementEvidence;
-  reward?: {id?:string;title?:string;cost?:number;input?:string};
+  reward?: {id?:string;title?:string;cost?:number;input?:string;kind?:'automatic'|'power-up'|'custom-power-up';type?:string};
+  charityDonation?:{campaignId?:string;name?:string};
   /** A source-provided correlation key, not proof of semantic equivalence. */
   upstreamBatchId?: string;
   /** Only explicitly recognized measurements; monetary amounts are NOT converted. */
@@ -49,11 +50,13 @@ export interface SocialSignalV1 {
   };
 }
 
+export interface MoneyEvidence {value:number;decimalPlaces:number;currency:string}
 export interface EngagementEvidence {
-  kind:'poll'|'prediction'|'goal';id:string;phase:'begin'|'progress'|'lock'|'end';
+  kind:'poll'|'prediction'|'goal'|'charity';id:string;phase:'begin'|'progress'|'lock'|'end';
   title?:string;status?:string;expiresAtMs?:number;winnerId?:string;
   choices?:{id:string;title:string;votes?:number;users?:number;points?:number}[];
   goalType?:string;current?:number;target?:number;achieved?:boolean;
+  currentMoney?:MoneyEvidence;targetMoney?:MoneyEvidence;
 }
 export interface SocialSignalOptions {
   /** Local wall-clock receipt time; upstream timestamps are not local receipt time. */
@@ -75,17 +78,30 @@ const boundedText = (candidate: unknown, limit: number): string | undefined =>
 
 const record = (value:unknown):Record<string,unknown> =>
   value && typeof value==='object' && !Array.isArray(value) ? value as Record<string,unknown> : {};
+function moneyEvidence(value:unknown):MoneyEvidence|undefined {
+  const row=record(value),amount=nonnegativeCount(row.value),decimalPlaces=nonnegativeCount(row.decimal_places),currency=typeof row.currency==='string'?row.currency:undefined;
+  if(amount===undefined||decimalPlaces===undefined||decimalPlaces>9||!currency||!/^([A-Z]{3})$/.test(currency))return undefined;
+  return {value:amount,decimalPlaces,currency};
+}
+/** Convert minor units using strings, not floating point rounding. */
+export function formatMoneyEvidence(value:MoneyEvidence):string {
+  const digits=String(value.value).padStart(value.decimalPlaces+1,'0');
+  return value.decimalPlaces?digits.slice(0,-value.decimalPlaces)+'.'+digits.slice(-value.decimalPlaces):digits;
+}
 function engagementEvidence(kind:ChatEventType,data:Record<string,unknown>):EngagementEvidence|undefined {
-  if(kind!=='poll'&&kind!=='prediction'&&kind!=='goal')return undefined;
+  if(kind!=='poll'&&kind!=='prediction'&&kind!=='goal'&&kind!=='charity')return undefined;
   const id=boundedText(data.id,128),phase=data.phase;
   if(!id||(phase!=='begin'&&phase!=='progress'&&phase!=='end'&&!(kind==='prediction'&&phase==='lock')))return undefined;
   const result:EngagementEvidence={kind,id,phase};
-  const title=boundedText(kind==='goal'?data.description:data.title,160),status=boundedText(data.status,32);
+  const title=boundedText(kind==='charity'?data.charity_name:kind==='goal'?data.description:data.title,160),status=boundedText(data.status,32);
   if(title)result.title=title;if(status)result.status=status;
   const end=kind==='prediction'?data.locks_at:data.ends_at;
   const expiry=typeof end==='string'?Date.parse(end):NaN;
   if(Number.isSafeInteger(expiry)&&expiry>=0)result.expiresAtMs=expiry;
-  if(kind==='goal'){
+  if(kind==='charity'){
+    const currentMoney=moneyEvidence(data.current_amount),targetMoney=moneyEvidence(data.target_amount);
+    if(currentMoney)result.currentMoney=currentMoney;if(targetMoney)result.targetMoney=targetMoney;
+  }else if(kind==='goal'){
     const goalType=boundedText(data.type,48),current=nonnegativeCount(data.current_amount),target=nonnegativeCount(data.target_amount);
     if(goalType)result.goalType=goalType;if(current!==undefined)result.current=current;if(target!==undefined)result.target=target;
     if(typeof data.is_achieved==='boolean')result.achieved=data.is_achieved;
@@ -113,7 +129,8 @@ function hypeEvidence(data:Record<string,unknown>):SocialSignalV1['hypeTrain'] {
 function rewardEvidence(data:Record<string,unknown>):SocialSignalV1['reward'] {
   const reward=record(data.reward),id=boundedText(reward.id,128),title=boundedText(reward.title,100),
     cost=nonnegativeCount(reward.cost),input=boundedText(data.userInput,240);
-  const evidence={...(id?{id}:{}),...(title?{title}:{}),...(cost!==undefined?{cost}:{}),...(input?{input}:{})};
+  const type=boundedText(reward.type,64),kind=reward.kind;
+  const evidence:NonNullable<SocialSignalV1['reward']>={...(type?{type}:{}),...(kind==='automatic'||kind==='power-up'||kind==='custom-power-up'?{kind}:{}),...(id?{id}:{}),...(title?{title}:{}),...(cost!==undefined?{cost}:{}),...(input?{input}:{})};
   return Object.keys(evidence).length?evidence:undefined;
 }
 
@@ -163,8 +180,11 @@ export function toSocialSignal(
   const data = event.data && typeof event.data === 'object' && !Array.isArray(event.data)
     ? event.data as Record<string, unknown> : {};
   const measurements: NonNullable<SocialSignalV1['measurements']> = {};
-  if (typeof data.amount === 'string') measurements.amount = data.amount;
-  if (typeof data.currency === 'string') measurements.currency = data.currency;
+  const charityDonation=event.type==='donation'&&data.charityDonation===true;
+  const money=charityDonation?moneyEvidence(data.money):undefined;
+  if(money){measurements.amount=formatMoneyEvidence(money);measurements.currency=money.currency;}
+  if (!charityDonation&&typeof data.amount === 'string') measurements.amount = data.amount;
+  if (!charityDonation&&typeof data.currency === 'string') measurements.currency = data.currency;
   const bits = nonnegativeCount(data.bits);
   const count = nonnegativeCount(data.count);
   if (bits !== undefined) measurements.bits = bits;
@@ -212,6 +232,7 @@ export function toSocialSignal(
         threadMessageId: message.reply?.threadMessageId,
       } : {}),
     } } : {}),
+    ...(charityDonation?{charityDonation:{campaignId:boundedText(data.campaignId,128),name:boundedText(data.charityName,100)}}:{}),
     ...(engagement?{engagement}:{}),
     ...(hypeTrain?{hypeTrain}:{}),
     ...(reward?{reward}:{}),

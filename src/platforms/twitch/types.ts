@@ -32,7 +32,11 @@ export type TwitchEngagementSubscriptionType =
   | `channel.poll.${'begin'|'progress'|'end'}`
   | `channel.prediction.${'begin'|'progress'|'lock'|'end'}`
   | `channel.goal.${'begin'|'progress'|'end'}`;
+export type TwitchCharitySubscriptionType = `channel.charity_campaign.${'start'|'progress'|'stop'|'donate'}`;
+export type TwitchPowerSubscriptionType = 'channel.channel_points_automatic_reward_redemption.add'|'channel.bits.use'|'channel.custom_power_up_redemption.add';
 export type TwitchEventSubSubscriptionType =
+  | TwitchCharitySubscriptionType
+  | TwitchPowerSubscriptionType
   | TwitchEngagementSubscriptionType
   | TwitchChatSubscriptionType
   | TwitchHypeTrainSubscriptionType

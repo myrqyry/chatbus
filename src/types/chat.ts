@@ -184,6 +184,7 @@ export type ChatEventType =
   | 'poll'
   | 'prediction'
   | 'goal'
+  | 'charity'
   | 'hype-train'
   | 'stream-online'
   | 'stream-offline'

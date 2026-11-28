@@ -1,7 +1,7 @@
 import { fetchWithTimeout } from '../../network/fetch';
 import type {
   TwitchAuth,
-  TwitchEngagementSubscriptionType,
+  TwitchEngagementSubscriptionType,TwitchCharitySubscriptionType,TwitchPowerSubscriptionType,
   TwitchChatSubscriptionType,
   TwitchEventSubSubscription,
   TwitchEventSubSubscriptionType,
@@ -45,6 +45,8 @@ export const TWITCH_ENGAGEMENT_SUBSCRIPTIONS:TwitchEngagementSubscriptionType[]=
   'channel.prediction.begin','channel.prediction.progress','channel.prediction.lock','channel.prediction.end',
   'channel.goal.begin','channel.goal.progress','channel.goal.end',
 ];
+export const TWITCH_CHARITY_SUBSCRIPTIONS:TwitchCharitySubscriptionType[]=['channel.charity_campaign.start','channel.charity_campaign.progress','channel.charity_campaign.stop','channel.charity_campaign.donate'];
+export const TWITCH_POWER_SUBSCRIPTIONS:TwitchPowerSubscriptionType[]=['channel.channel_points_automatic_reward_redemption.add','channel.bits.use','channel.custom_power_up_redemption.add'];
 export const TWITCH_FOLLOW_SUBSCRIPTIONS: TwitchFollowerSubscriptionType[] = ['channel.follow'];
 export const TWITCH_REWARD_SUBSCRIPTIONS: TwitchRewardSubscriptionType[] = [
   'channel.channel_points_custom_reward_redemption.add',
@@ -56,7 +58,7 @@ const CHAT_SUBSCRIPTIONS = new Set<TwitchEventSubSubscriptionType>(DEFAULT_TWITC
 const FOLLOW_SUBSCRIPTIONS = new Set<TwitchEventSubSubscriptionType>(TWITCH_FOLLOW_SUBSCRIPTIONS);
 
 const versionFor = (type: TwitchEventSubSubscriptionType): string => {
-  if (HYPE_TRAIN_SUBSCRIPTIONS.has(type) || type === 'channel.update' || type === 'channel.follow') return '2';
+  if (HYPE_TRAIN_SUBSCRIPTIONS.has(type) || type === 'channel.update' || type === 'channel.follow' || type === 'channel.channel_points_automatic_reward_redemption.add') return '2';
   return '1';
 };
 
@@ -77,7 +79,9 @@ const conditionFor = (
 const scopeRequirementsFor = (type: TwitchEventSubSubscriptionType): readonly (readonly string[])[] => {
   if (HYPE_TRAIN_SUBSCRIPTIONS.has(type)) return [['channel:read:hype_train']];
   if (FOLLOW_SUBSCRIPTIONS.has(type)) return [['moderator:read:followers']];
-  if (type === 'channel.channel_points_custom_reward_redemption.add') {
+  if(type.startsWith('channel.charity_campaign.'))return [['channel:read:charity']];
+  if(type==='channel.bits.use'||type==='channel.custom_power_up_redemption.add')return [['bits:read']];
+  if (type === 'channel.channel_points_custom_reward_redemption.add'||type==='channel.channel_points_automatic_reward_redemption.add') {
     return [['channel:read:redemptions', 'channel:manage:redemptions']];
   }
   if(type.startsWith('channel.poll.'))return [['channel:read:polls','channel:manage:polls']];

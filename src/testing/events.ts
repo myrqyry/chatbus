@@ -22,7 +22,7 @@ const CHAT_EVENT_TYPES: ReadonlySet<string> = new Set<ChatEventType>([
   'channel-update',
   'reward-redemption',
   'room-state',
-  'hype-train','poll','prediction','goal',
+  'hype-train','poll','prediction','goal','charity',
   'stream-online',
   'stream-offline',
   'system',
