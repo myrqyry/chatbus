@@ -38,6 +38,8 @@ export interface SocialSignalV1 {
   hypeTrain?: {id:string;phase:HypeTrainPhase;level:number;total:number;progress?:number;goal?:number;expiresAtMs?:number};
   engagement?: EngagementEvidence;
   reward?: {id?:string;title?:string;cost?:number;input?:string;kind?:'automatic'|'power-up'|'custom-power-up';type?:string};
+  shoutout?:{direction:'sent'|'received';channelId:string;channelName:string;displayName?:string};
+  adBreak?:{durationSeconds?:number;startedAtMs?:number;automatic?:boolean};
   charityDonation?:{campaignId?:string;name?:string};
   /** A source-provided correlation key, not proof of semantic equivalence. */
   upstreamBatchId?: string;
@@ -198,6 +200,15 @@ export function toSocialSignal(
   const message = event.message;
   const hypeTrain=event.type==='hype-train'?hypeEvidence(data):undefined;
   const engagement=engagementEvidence(event.type,data);
+  const otherId=boundedText(data.otherId,128),otherName=boundedText(data.otherName,64),direction=data.direction;
+  const shoutout:SocialSignalV1['shoutout']=event.type==='shoutout'&&otherId&&otherName&&(direction==='received'||direction==='sent')
+    ?{direction,channelId:otherId,channelName:otherName,...(boundedText(data.displayName,64)?{displayName:boundedText(data.displayName,64)}:{})}:undefined;
+  const durationSeconds=nonnegativeCount(data.durationSeconds),startedAtMs=typeof data.startedAt==='string'?Date.parse(data.startedAt):NaN;
+  const adBreak:SocialSignalV1['adBreak']=event.type==='ad-break'?{
+    ...(durationSeconds!==undefined&&durationSeconds>0?{durationSeconds}:{}),
+    ...(Number.isSafeInteger(startedAtMs)&&startedAtMs>=0?{startedAtMs}:{}),
+    ...(typeof data.automatic==='boolean'?{automatic:data.automatic}:{}),
+  }:undefined;
   const reward=event.type==='reward-redemption'?rewardEvidence(data):undefined;
   return {
     schemaVersion: 1,
@@ -233,6 +244,8 @@ export function toSocialSignal(
       } : {}),
     } } : {}),
     ...(charityDonation?{charityDonation:{campaignId:boundedText(data.campaignId,128),name:boundedText(data.charityName,100)}}:{}),
+    ...(shoutout?{shoutout}:{}),
+    ...(adBreak?{adBreak}:{}),
     ...(engagement?{engagement}:{}),
     ...(hypeTrain?{hypeTrain}:{}),
     ...(reward?{reward}:{}),

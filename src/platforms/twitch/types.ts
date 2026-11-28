@@ -34,7 +34,9 @@ export type TwitchEngagementSubscriptionType =
   | `channel.goal.${'begin'|'progress'|'end'}`;
 export type TwitchCharitySubscriptionType = `channel.charity_campaign.${'start'|'progress'|'stop'|'donate'}`;
 export type TwitchPowerSubscriptionType = 'channel.channel_points_automatic_reward_redemption.add'|'channel.bits.use'|'channel.custom_power_up_redemption.add';
+export type TwitchBroadcastNoticeSubscriptionType = 'channel.shoutout.receive'|'channel.shoutout.create'|'channel.ad_break.begin';
 export type TwitchEventSubSubscriptionType =
+  | TwitchBroadcastNoticeSubscriptionType
   | TwitchCharitySubscriptionType
   | TwitchPowerSubscriptionType
   | TwitchEngagementSubscriptionType

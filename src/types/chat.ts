@@ -185,6 +185,8 @@ export type ChatEventType =
   | 'prediction'
   | 'goal'
   | 'charity'
+  | 'shoutout'
+  | 'ad-break'
   | 'hype-train'
   | 'stream-online'
   | 'stream-offline'

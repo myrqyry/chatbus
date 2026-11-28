@@ -323,6 +323,20 @@ export function normalizeTwitchEventSubNotification(
   const channelId = stringValue(event.broadcaster_user_id) ?? (subscriptionType.startsWith('channel.charity_campaign.')?stringValue(event.broadcaster_id):undefined);
   const channelName = stringValue(event.broadcaster_user_login) ?? (subscriptionType.startsWith('channel.charity_campaign.')?stringValue(event.broadcaster_login):undefined);
 
+  if(subscriptionType==='channel.shoutout.receive'||subscriptionType==='channel.shoutout.create'){
+    if(!channelId)return null;
+    const received=subscriptionType==='channel.shoutout.receive',prefix=received?'from_broadcaster_':'to_broadcaster_';
+    const otherId=stringValue(event[prefix+'user_id']),otherName=stringValue(event[prefix+'user_login']),displayName=stringValue(event[prefix+'user_name']);
+    if(!otherId||!otherName)return null;
+    return {id:envelope.metadata.message_id,type:'shoutout',platform:'twitch',channelId,channelName,timestamp,origin:'live',
+      ...(received?{user:{platform:'twitch',id:otherId,username:otherName,displayName}}:{}),
+      data:{direction:received?'received':'sent',otherId,otherName,displayName,count:event.viewer_count},raw:envelope};
+  }
+  if(subscriptionType==='channel.ad_break.begin'){
+    if(!channelId)return null;
+    return {id:envelope.metadata.message_id,type:'ad-break',platform:'twitch',channelId,channelName,timestamp,origin:'live',
+      data:{durationSeconds:event.duration_seconds,startedAt:event.started_at,automatic:event.is_automatic},raw:envelope};
+  }
   const charity=/^channel\.charity_campaign\.(start|progress|stop|donate)$/.exec(subscriptionType);
   const rewardActor=():ChatUser|undefined=>{
     const username=stringValue(event.user_login);

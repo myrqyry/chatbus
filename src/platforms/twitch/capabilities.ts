@@ -9,7 +9,7 @@ export type TwitchCapabilityId =
   | 'hype-train'
   | 'followers'
   | 'rewards'
-  | 'moderation' | 'polls' | 'predictions' | 'goals' | 'charity' | 'automatic-rewards' | 'power-ups';
+  | 'moderation' | 'polls' | 'predictions' | 'goals' | 'charity' | 'automatic-rewards' | 'power-ups' | 'shoutouts' | 'ads';
 
 export type TwitchEventSubConditionKind = 'chat-user' | 'broadcaster' | 'moderator';
 
@@ -103,6 +103,12 @@ const engagementCapability=(id:'polls'|'predictions'|'goals',kind:'poll'|'predic
   })),
 });
 export const TWITCH_CAPABILITY_REGISTRY: Readonly<Record<TwitchCapabilityId, TwitchCapabilityDefinition>> = {
+  shoutouts:{id:'shoutouts',description:'Observe incoming and outgoing shoutouts.',subscriptions:['channel.shoutout.receive','channel.shoutout.create'].map(type=>({
+    type,version:'1',condition:'moderator',scopeRequirements:[scope('moderator:read:shoutouts','moderator:manage:shoutouts')],normalizedEventTypes:['shoutout'],
+  }))},
+  ads:{id:'ads',description:'Observe ad break starts.',subscriptions:[{
+    type:'channel.ad_break.begin',version:'1',condition:'broadcaster',scopeRequirements:[scope('channel:read:ads')],normalizedEventTypes:['ad-break'],
+  }]},
   charity:{id:'charity',description:'Observe Twitch charity campaign and donation events.',subscriptions:TWITCH_CHARITY_SUBSCRIPTIONS.map(type=>({
     type,version:'1',condition:'broadcaster',scopeRequirements:[scope('channel:read:charity')],normalizedEventTypes:[type.endsWith('.donate')?'donation':'charity'],
   }))},
