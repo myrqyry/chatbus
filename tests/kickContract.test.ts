@@ -51,6 +51,7 @@ describe('Kick official contract gaps',()=>{
    .mockResolvedValueOnce(Response.json({data:[sub('channel.followed','existing'),sub('chat.message.sent','created')]}));
   const r=await reconcileKickWebhookSubscriptions({appAccessToken:'fixture-token',broadcasterId:'1',events:['channel.followed','chat.message.sent','kicks.gifted'],fetcher});
   expect(r.active.map(x=>x.id)).toEqual(['existing','created']);
+  expect(r.created.map(x=>x.id)).toEqual(['created']);
   expect(r.missing).toEqual(['kicks.gifted']);
   expect(JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body))).toEqual({broadcaster_user_id:1,method:'webhook',events:[{name:'chat.message.sent',version:1},{name:'kicks.gifted',version:1}]});
   expect(fetcher.mock.calls.map(x=>x[1]?.method??'GET')).toEqual(['GET','POST','GET']);

@@ -13,7 +13,7 @@ export interface KickSubscriptionOptions {
  signal?:AbortSignal;
 }
 /** Explicit one-shot reconciliation. No deletes, implicit grants, timers or blind POST retries. */
-export async function reconcileKickWebhookSubscriptions(options:KickSubscriptionOptions):Promise<{active:KickRegisteredSubscription[];missing:KickOfficialEventType[]}>{
+export async function reconcileKickWebhookSubscriptions(options:KickSubscriptionOptions):Promise<{active:KickRegisteredSubscription[];missing:KickOfficialEventType[];created:KickRegisteredSubscription[]}>{
  const broadcaster=Number(options.broadcasterId);
  if(!Number.isSafeInteger(broadcaster)||broadcaster<=0||String(broadcaster)!==options.broadcasterId||!options.appAccessToken.trim())throw Error('Invalid Kick subscription authorization');
  const desired=[...new Set(options.events)];
@@ -39,12 +39,16 @@ export async function reconcileKickWebhookSubscriptions(options:KickSubscription
  };
  const missing=(active:KickRegisteredSubscription[])=>desired.filter(type=>!active.some(x=>x.type===type));
  let active=await list();const absent=missing(active);
+ const before=new Set(active.map(row=>row.id)),receipts=new Map<string,KickOfficialEventType>();
  if(absent.length){
-  // A partial success or rejected event is not authoritative evidence of registration.
-  await request('POST',{broadcaster_user_id:broadcaster,method:'webhook',events:absent.map(name=>({name,version:1}))});
+  const result=await request('POST',{broadcaster_user_id:broadcaster,method:'webhook',events:absent.map(name=>({name,version:1}))});
+  for(const row of result){
+   if(row&&typeof row==='object'&&!row.error&&row.version===1&&absent.includes(row.name)&&typeof row.subscription_id==='string'&&/^[-A-Za-z0-9_]{1,128}$/.test(row.subscription_id)&&!before.has(row.subscription_id))receipts.set(row.subscription_id,row.name);
+  }
+  // Claim ownership only when a successful creation receipt agrees with readback.
   active=await list();
  }
- return {active,missing:missing(active)};
+ return {active,missing:missing(active),created:active.filter(row=>receipts.get(row.id)===row.type)};
 }
 
 export interface KickRemoveSubscriptionOptions {
