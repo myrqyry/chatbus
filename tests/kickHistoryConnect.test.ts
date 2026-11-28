@@ -86,4 +86,29 @@ describe('Kick initial history + realtime handoff',()=>{
     await vi.waitFor(()=>expect(events.map(event=>event.message?.id)).toEqual(['live']));
     connection.close();
   });
+  it('abandons optional history under burst pressure without dropping any live messages or replaying late history',async()=>{
+    let resolveHistory!:(r:Response)=>void;
+    const history=new Promise<Response>(r=>{resolveHistory=r;});
+    vi.stubGlobal('fetch',vi.fn(async(input:string|URL|Request)=>{
+      const url=String(input);
+      if(url.endsWith('/api/v2/channels/99/messages'))return history;
+      if(url.endsWith('/api/v1/realtime/auth/connection'))return Response.json({data:{token:'guest-token'}});
+      if(url.includes('/api/v1/realtime/'))return Response.json({data:{connections:[{provider:'centrifugo',credentials:{url:'wss://kick.test/socket'}}]}});
+      throw Error('unexpected '+url);
+    }));
+    const ids:string[]=[];
+    const connection=await connectKickChat({channel:'example',resolveChannel:async()=>channel,emitInitialHistory:true,onEvent:e=>{if(e.message)ids.push(e.message.id);}});
+    try{
+      await vi.waitFor(()=>expect(MockWebSocket.instances).toHaveLength(1));
+      const ws=MockWebSocket.instances[0]!;ws.emitOpen();
+      const connect=JSON.parse(ws.sent[0]!);ws.emitMessage(JSON.stringify({id:connect.id,connect:{ping:25}}));
+      for(const item of ws.sent.slice(1).map(value=>JSON.parse(value)))ws.emitMessage(JSON.stringify({id:item.id,subscribe:{}}));
+      for(let n=0;n<501;n++)ws.emitMessage(realtimeFrame('burst-'+n,'live'));
+      expect(ids).toEqual(Array.from({length:501},(_,n)=>'burst-'+n));
+      resolveHistory(Response.json({data:{messages:[historyMessage('old','late history','2026-11-02T22:29:58Z')]}}));
+      await new Promise(r=>setTimeout(r,10));
+      expect(ids).toHaveLength(501);
+    }finally{connection.close();}
+  });
+
 });

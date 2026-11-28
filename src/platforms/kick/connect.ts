@@ -34,6 +34,7 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
   let historyPending = options.emitInitialHistory === true && Boolean(channel.channelId);
   const historyController = new AbortController();
   const buffered: ChatEvent[] = [];
+  const maxBufferedEvents = 500;
   const seenMessageIds = new Set<string>();
   const remember = (id: string) => {
     seenMessageIds.add(id);
@@ -52,8 +53,14 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
   };
   const receiveRealtime = (event: ChatEvent) => {
     if (closed) return;
-    if (historyPending) buffered.push(event);
-    else deliver(event);
+    if (historyPending) {
+      buffered.push(event);
+      // History is optional. Never let it hold an unbounded live backlog.
+      if (buffered.length >= maxBufferedEvents) {
+        historyController.abort();
+        flushRealtime();
+      }
+    } else deliver(event);
   };
   const flushRealtime = () => {
     historyPending = false;
@@ -83,7 +90,7 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
       limit: options.initialHistoryLimit,
       signal: historyController.signal,
     }).then(events => {
-      if (closed) return;
+      if (closed || !historyPending) return;
       for (const event of events) deliver(event);
       flushRealtime();
     }, () => flushRealtime());
