@@ -378,3 +378,6 @@ export type {BrowserPublicPlatform} from './browser';
 
 export {fetchTwitchBroadcasterState} from './platforms/twitch/broadcaster-state';
 export type {TwitchBroadcasterStateOptions} from './platforms/twitch/broadcaster-state';
+
+export {normalizeKickOfficialEvent,KICK_OFFICIAL_EVENTS} from './platforms/kick/official-events';
+export type {KickOfficialEventType} from './platforms/kick/official-events';

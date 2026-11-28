@@ -43,6 +43,7 @@ export interface SocialSignalV1 {
   shoutout?:{direction:'sent'|'received';channelId:string;channelName:string;displayName?:string};
   adBreak?:{durationSeconds?:number;startedAtMs?:number;automatic?:boolean};
   charityDonation?:{campaignId?:string;name?:string};
+  kickGift?:{amount:number;name?:string;type?:string;tier?:string;quote?:string;pinnedSeconds?:number};
   /** A source-provided correlation key, not proof of semantic equivalence. */
   upstreamBatchId?: string;
   /** Only explicitly recognized measurements; monetary amounts are NOT converted. */
@@ -218,6 +219,12 @@ export function toSocialSignal(
     phase,...(typeof data.gift==='boolean'?{gift:data.gift}:{}),...(typeof data.anonymous==='boolean'?{anonymous:data.anonymous}:{}),
     ...(months!==undefined?{months}:{}),...(streakMonths!==undefined?{streakMonths}:{}),...(durationMonths!==undefined?{durationMonths}:{}),...(quote?{quote}:{}),
   }:undefined;
+  const gift=record(data.kickGift),giftAmount=nonnegativeCount(gift.amount);
+  const kickGift:SocialSignalV1['kickGift']=event.platform==='kick'&&event.type==='donation'&&giftAmount!==undefined&&giftAmount>0?{
+    amount:giftAmount,...(boundedText(gift.name,100)?{name:boundedText(gift.name,100)}:{}),...(boundedText(gift.type,64)?{type:boundedText(gift.type,64)}:{}),
+    ...(boundedText(gift.tier,64)?{tier:boundedText(gift.tier,64)}:{}),...(boundedText(gift.quote,240)?{quote:boundedText(gift.quote,240)}:{}),
+    ...(nonnegativeCount(gift.pinnedSeconds)!==undefined?{pinnedSeconds:nonnegativeCount(gift.pinnedSeconds)}:{})
+  }:undefined;
   const cheer:SocialSignalV1['cheer']=event.type==='cheer'&&(typeof data.anonymous==='boolean'||quote)?{...(typeof data.anonymous==='boolean'?{anonymous:data.anonymous}:{}),...(quote?{quote}:{})}:undefined;
   return {
     schemaVersion: 1,
@@ -253,6 +260,7 @@ export function toSocialSignal(
       } : {}),
     } } : {}),
     ...(charityDonation?{charityDonation:{campaignId:boundedText(data.campaignId,128),name:boundedText(data.charityName,100)}}:{}),
+    ...(kickGift?{kickGift}:{}),
     ...(subscription?{subscription}:{}),...(cheer?{cheer}:{}),
     ...(shoutout?{shoutout}:{}),
     ...(adBreak?{adBreak}:{}),

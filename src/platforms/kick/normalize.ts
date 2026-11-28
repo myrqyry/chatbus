@@ -149,7 +149,7 @@ export function normalizeKickEvent(
         ...base,
         id: event.data.id,
         type: 'message-delete',
-        data: { messageId: event.data.message?.id },
+        data: { messageId: event.data.message?.id ?? event.data.id },
       };
     case 'UserBanned': {
       const user = event.data.user?.username
@@ -181,7 +181,7 @@ export function normalizeKickEvent(
           username: event.data.username,
           displayName: event.data.username,
         },
-        data: { months: event.data.months },
+        data: { months: event.data.months,...(typeof event.data.months==='number'&&event.data.months>1?{subscriptionPhase:'resub'}:{}) },
       };
     case 'GiftedSubscriptions':
       return {
@@ -194,7 +194,7 @@ export function normalizeKickEvent(
               displayName: event.data.gifter_username,
             }
           : undefined,
-        data: { giftedUsernames: event.data.gifted_usernames ?? [] },
+        data: { giftedUsernames: event.data.gifted_usernames ?? [],subscriptionPhase:'gift',...(Array.isArray(event.data.gifted_usernames)&&event.data.gifted_usernames.length&&event.data.gifted_usernames.every(n=>typeof n==='string'&&n.trim())?{count:event.data.gifted_usernames.length}:{}) },
       };
     case 'ChannelSubscription':
       return {
@@ -213,7 +213,8 @@ export function normalizeKickEvent(
           ? { platform: 'kick', username: event.data.gifter_username, displayName: event.data.gifter_username }
           : undefined,
         data: {
-          kind: 'lucky-gift-subscriptions',
+          kind: 'lucky-gift-subscriptions',subscriptionPhase:'gift',
+          ...(Array.isArray(event.data.gifted_usernames)&&event.data.gifted_usernames.length&&event.data.gifted_usernames.every(n=>typeof n==='string'&&n.trim())?{count:event.data.gifted_usernames.length}:{}),
           giftedUsernames: event.data.gifted_usernames ?? [],
           event: event.data,
         },

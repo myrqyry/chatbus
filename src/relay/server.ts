@@ -181,3 +181,6 @@ export function attachLocalKickRelay(options: LocalKickRelayOptions) {
     close() { if (!closed) { closed = true; relay.close(); } },
   };
 }
+
+export {createKickWebhookReceiver,fetchKickWebhookPublicKey} from '../platforms/kick/webhook';
+export type {KickWebhookOptions,KickWebhookSubscription,KickWebhookResult} from '../platforms/kick/webhook';
