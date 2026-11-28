@@ -323,6 +323,13 @@ export function normalizeTwitchEventSubNotification(
   const channelId = stringValue(event.broadcaster_user_id);
   const channelName = stringValue(event.broadcaster_user_login);
 
+  const engagement=/^channel\.(poll|prediction|goal)\.(begin|progress|lock|end)$/.exec(subscriptionType);
+  if(engagement){
+    const kind=engagement[1] as 'poll'|'prediction'|'goal',phase=engagement[2];
+    if(!channelId||!stringValue(event.id)||(phase==='lock'&&kind!=='prediction'))return null;
+    return {id:envelope.metadata.message_id,type:kind,platform:'twitch',channelId,channelName,timestamp,
+      data:{...event,phase},raw:envelope};
+  }
   if (subscriptionType === 'channel.chat.message_delete') {
     return {
       id: stringValue(event.message_id) ?? envelope.metadata.message_id,

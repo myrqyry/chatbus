@@ -1,5 +1,5 @@
 import type { ChatEventType } from '../../types/chat';
-import { TWITCH_SHARED_CHAT_SUBSCRIPTIONS } from './subscriptions';
+import { TWITCH_SHARED_CHAT_SUBSCRIPTIONS,TWITCH_ENGAGEMENT_SUBSCRIPTIONS,twitchSubscriptionScopeRequirements } from './subscriptions';
 
 export type TwitchCapabilityId =
   | 'chat'
@@ -9,7 +9,7 @@ export type TwitchCapabilityId =
   | 'hype-train'
   | 'followers'
   | 'rewards'
-  | 'moderation';
+  | 'moderation' | 'polls' | 'predictions' | 'goals';
 
 export type TwitchEventSubConditionKind = 'chat-user' | 'broadcaster' | 'moderator';
 
@@ -96,7 +96,16 @@ const hypeTrainSubscription = (
   normalizedEventTypes: ['hype-train'],
 });
 
+const engagementCapability=(id:'polls'|'predictions'|'goals',kind:'poll'|'prediction'|'goal'):TwitchCapabilityDefinition=>({
+  id,description:'Observe Twitch '+id+' lifecycle.',
+  subscriptions:TWITCH_ENGAGEMENT_SUBSCRIPTIONS.filter(type=>type.startsWith('channel.'+kind+'.')).map(type=>({
+    type,version:'1',condition:'broadcaster',scopeRequirements:twitchSubscriptionScopeRequirements([type]).map(anyOf=>({anyOf})),normalizedEventTypes:[kind],
+  })),
+});
 export const TWITCH_CAPABILITY_REGISTRY: Readonly<Record<TwitchCapabilityId, TwitchCapabilityDefinition>> = {
+  polls:engagementCapability('polls','poll'),
+  predictions:engagementCapability('predictions','prediction'),
+  goals:engagementCapability('goals','goal'),
   chat: {
     id: 'chat',
     description: 'Read Twitch chat and the chat-native notices used by overlays.',

@@ -1,6 +1,7 @@
 import { fetchWithTimeout } from '../../network/fetch';
 import type {
   TwitchAuth,
+  TwitchEngagementSubscriptionType,
   TwitchChatSubscriptionType,
   TwitchEventSubSubscription,
   TwitchEventSubSubscriptionType,
@@ -39,6 +40,11 @@ export const TWITCH_SHARED_CHAT_SUBSCRIPTIONS: TwitchSharedChatSubscriptionType[
   'channel.shared_chat.end',
 ];
 
+export const TWITCH_ENGAGEMENT_SUBSCRIPTIONS:TwitchEngagementSubscriptionType[]=[
+  'channel.poll.begin','channel.poll.progress','channel.poll.end',
+  'channel.prediction.begin','channel.prediction.progress','channel.prediction.lock','channel.prediction.end',
+  'channel.goal.begin','channel.goal.progress','channel.goal.end',
+];
 export const TWITCH_FOLLOW_SUBSCRIPTIONS: TwitchFollowerSubscriptionType[] = ['channel.follow'];
 export const TWITCH_REWARD_SUBSCRIPTIONS: TwitchRewardSubscriptionType[] = [
   'channel.channel_points_custom_reward_redemption.add',
@@ -74,6 +80,9 @@ const scopeRequirementsFor = (type: TwitchEventSubSubscriptionType): readonly (r
   if (type === 'channel.channel_points_custom_reward_redemption.add') {
     return [['channel:read:redemptions', 'channel:manage:redemptions']];
   }
+  if(type.startsWith('channel.poll.'))return [['channel:read:polls','channel:manage:polls']];
+  if(type.startsWith('channel.prediction.'))return [['channel:read:predictions','channel:manage:predictions']];
+  if(type.startsWith('channel.goal.'))return [['channel:read:goals']];
   if (type === 'channel.ban') return [['channel:moderate']];
   return [];
 };

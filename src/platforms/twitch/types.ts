@@ -28,7 +28,12 @@ export type TwitchFollowerSubscriptionType = 'channel.follow';
 export type TwitchRewardSubscriptionType = 'channel.channel_points_custom_reward_redemption.add';
 export type TwitchModerationSubscriptionType = 'channel.ban';
 
+export type TwitchEngagementSubscriptionType =
+  | `channel.poll.${'begin'|'progress'|'end'}`
+  | `channel.prediction.${'begin'|'progress'|'lock'|'end'}`
+  | `channel.goal.${'begin'|'progress'|'end'}`;
 export type TwitchEventSubSubscriptionType =
+  | TwitchEngagementSubscriptionType
   | TwitchChatSubscriptionType
   | TwitchHypeTrainSubscriptionType
   | TwitchStateSubscriptionType

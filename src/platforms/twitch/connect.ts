@@ -8,7 +8,7 @@ import { createTwitchEventSubSocket } from './socket';
 import {
   DEFAULT_TWITCH_CHAT_SUBSCRIPTIONS,
   TWITCH_FOLLOW_SUBSCRIPTIONS,TWITCH_REWARD_SUBSCRIPTIONS,TWITCH_HYPE_TRAIN_SUBSCRIPTIONS,
-  TWITCH_STATE_SUBSCRIPTIONS,TWITCH_SHARED_CHAT_SUBSCRIPTIONS,
+  TWITCH_STATE_SUBSCRIPTIONS,TWITCH_SHARED_CHAT_SUBSCRIPTIONS,TWITCH_ENGAGEMENT_SUBSCRIPTIONS,
   createTwitchEventSubSubscription,
   subscribeTwitchChat,
   twitchSubscriptionMissingScopeRequirements,
@@ -96,7 +96,7 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
   }
   const optionalTypes = options.broadcasterEvents && auth.userId === channel.id
     ? [...TWITCH_FOLLOW_SUBSCRIPTIONS,...TWITCH_REWARD_SUBSCRIPTIONS,...TWITCH_HYPE_TRAIN_SUBSCRIPTIONS,
-       ...TWITCH_STATE_SUBSCRIPTIONS,...TWITCH_SHARED_CHAT_SUBSCRIPTIONS]
+       ...TWITCH_STATE_SUBSCRIPTIONS,...TWITCH_SHARED_CHAT_SUBSCRIPTIONS,...TWITCH_ENGAGEMENT_SUBSCRIPTIONS]
        .filter(type=>!requestedSubscriptions.includes(type)&&!twitchSubscriptionMissingScopeRequirements([type],auth.scopes??[]).length)
     : [];
   const requestedTypes = [...new Set([...requestedSubscriptions,...optionalTypes])];
