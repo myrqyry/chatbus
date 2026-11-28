@@ -142,7 +142,7 @@ const normalizeMessage = (
 
   return {
     id: event.message_id,
-    type: event.cheer?.bits ? 'cheer' : 'message',
+    type: event.cheer?.bits && (!context.activeSubscriptions?.has('channel.cheer')||!!event.source_broadcaster_user_id&&event.source_broadcaster_user_id!==event.broadcaster_user_id) ? 'cheer' : 'message',
     platform: 'twitch',
     channelId: event.broadcaster_user_id,
     channelName: event.broadcaster_user_login,
@@ -222,7 +222,7 @@ const normalizeNotification = (
   const username = stringValue(event.chatter_user_login);
   const displayName = stringValue(event.chatter_user_name);
   const badges = badgeRowsFromUnknown(event.badges);
-  const user: ChatUser | undefined = username ? {
+  const user: ChatUser | undefined = username && event.chatter_is_anonymous!==true ? {
     platform: 'twitch',
     id: userId,
     username,
@@ -262,7 +262,7 @@ const normalizeNotification = (
   const subTier = detail?.is_prime === true ? 'Prime' : stringValue(detail?.sub_tier);
   const reportedCount = type === 'raid' ? detail?.viewer_count
     : type === 'gift-subscription' && noticeType.replace(/^shared_chat_/u, '') === 'community_sub_gift' ? detail?.total
-    : undefined;
+    : type==='gift-subscription'&&noticeType.replace(/^shared_chat_/u,'')==='sub_gift'?1:undefined;
   const count = typeof reportedCount === 'number' && Number.isSafeInteger(reportedCount) && reportedCount >= 0 ? reportedCount : undefined;
   const message = notificationMessage(event, envelope, context, user, channelId, channelName, timestamp);
   // Watch-streak and announcement notices can be the *only* delivery of a
@@ -273,6 +273,15 @@ const normalizeNotification = (
     type = 'message';
   }
 
+  // Dedicated feeds own local alert families when confirmed active. Native
+  // chat bodies remain visible; shared-room events are not owned by this feed.
+  const dedicated=baseNoticeType==='sub'?'channel.subscribe':baseNoticeType==='resub'?'channel.subscription.message':
+    ['sub_gift','community_sub_gift'].includes(baseNoticeType)?'channel.subscription.gift':undefined;
+  if((!noticeType.startsWith('shared_chat_')&&dedicated&&context.activeSubscriptions?.has(dedicated))||
+    (baseNoticeType==='sub_gift'&&stringValue(detail?.community_gift_id)))type=message?'message':'system';
+  const subPhase=baseNoticeType==='sub'?'start':baseNoticeType==='resub'?'resub':type==='gift-subscription'?'gift':undefined;
+  const charity=baseNoticeType==='charity_donation'&&(noticeType.startsWith('shared_chat_')||!context.activeSubscriptions?.has('channel.charity_campaign.donate'));
+  if(charity)type='donation';
   return {
     id: stringValue(event.message_id) ?? envelope.metadata.message_id,
     type,
@@ -285,6 +294,8 @@ const normalizeNotification = (
     data: {
       kind: 'chat-notification',
       noticeType,
+      ...(subPhase?{subscriptionPhase:subPhase,months:detail?.cumulative_months,streakMonths:detail?.streak_months,durationMonths:detail?.duration_months,gift:detail?.is_gift,anonymous:event.chatter_is_anonymous===true?true:undefined}:{}),
+      ...(charity?{charityDonation:true,charityName:detail?.charity_name,money:detail?.amount}:{}),
       ...(count !== undefined ? { count } : {}),
       ...(subTier ? { sub_tier: subTier } : {}),
       systemMessage: stringValue(event.system_message),
@@ -323,6 +334,23 @@ export function normalizeTwitchEventSubNotification(
   const channelId = stringValue(event.broadcaster_user_id) ?? (subscriptionType.startsWith('channel.charity_campaign.')?stringValue(event.broadcaster_id):undefined);
   const channelName = stringValue(event.broadcaster_user_login) ?? (subscriptionType.startsWith('channel.charity_campaign.')?stringValue(event.broadcaster_login):undefined);
 
+  if(subscriptionType==='channel.subscribe'||subscriptionType==='channel.subscription.end'||subscriptionType==='channel.subscription.gift'||subscriptionType==='channel.subscription.message'||subscriptionType==='channel.cheer'){
+    if(!channelId)return null;
+    const gift=subscriptionType==='channel.subscription.gift',cheer=subscriptionType==='channel.cheer';
+    const anonymous=event.is_anonymous===true,username=stringValue(event.user_login);
+    const actor=!anonymous&&username?{platform:'twitch' as const,id:stringValue(event.user_id),username,displayName:stringValue(event.user_name)}:undefined;
+    const phase=gift?'gift':subscriptionType==='channel.subscription.end'?'end':subscriptionType==='channel.subscription.message'?'resub':'start';
+    const type:ChatEvent['type']=cheer?'cheer':gift?'gift-subscription':phase==='end'?'subscription-end':phase==='start'&&event.is_gift===true?'subscription-received':'subscription';
+    return {id:envelope.metadata.message_id,type,platform:'twitch',channelId,channelName,timestamp,user:actor,
+      data:cheer?{bits:event.bits,anonymous,quote:event.message}:{subscriptionPhase:phase,sub_tier:event.tier,gift:event.is_gift,
+      ...(gift?{anonymous,count:event.total}:{}),months:event.cumulative_months,streakMonths:event.streak_months,durationMonths:event.duration_months,quote:asRecord(event.message)?.text},raw:envelope};
+  }
+  if(/^channel\.channel_points_custom_reward\.(add|update|remove)$/.test(subscriptionType)){
+    if(!channelId||!stringValue(event.id))return null;
+    const phase=subscriptionType.endsWith('.add')?'added':subscriptionType.endsWith('.remove')?'removed':'updated';
+    return {id:envelope.metadata.message_id,type:'reward-catalog',platform:'twitch',channelId,channelName,timestamp,
+      data:{reward:event,status:phase},raw:envelope};
+  }
   if(subscriptionType==='channel.shoutout.receive'||subscriptionType==='channel.shoutout.create'){
     if(!channelId)return null;
     const received=subscriptionType==='channel.shoutout.receive',prefix=received?'from_broadcaster_':'to_broadcaster_';
@@ -362,7 +390,7 @@ export function normalizeTwitchEventSubNotification(
     if(!automatic&&!custom&&!type)return null;
     const bits=custom?(stringValue(event.user_id)?event.user_id===channelId?0:details.bits:undefined):automatic?undefined:event.bits;
     return {id:stringValue(event.id)??envelope.metadata.message_id,type:'reward-redemption',platform:'twitch',channelId,channelName,timestamp,origin:'live',user:rewardActor(),
-      data:{reward:{id:custom?details.id:undefined,title:custom?details.title:undefined,type,kind,cost:automatic?details.channel_points:undefined},
+      data:{reward:{id:custom?details.id:undefined,title:custom?details.title:undefined,type,kind,cost:automatic?(event.user_id===channelId?0:details.channel_points):undefined},
         bits,userInput:custom?event.user_input:asRecord(event.message)?.text},raw:envelope};
   }
   const engagement=/^channel\.(poll|prediction|goal)\.(begin|progress|lock|end)$/.exec(subscriptionType);
@@ -542,7 +570,7 @@ export function normalizeTwitchEventSubNotification(
     };
   }
 
-  if (subscriptionType === 'channel.channel_points_custom_reward_redemption.add') {
+  if (subscriptionType === 'channel.channel_points_custom_reward_redemption.add'||subscriptionType==='channel.channel_points_custom_reward_redemption.update') {
     const username = stringValue(event.user_login);
     const user: ChatUser | undefined = username ? {
       platform: 'twitch',
@@ -552,8 +580,8 @@ export function normalizeTwitchEventSubNotification(
       raw: event,
     } : undefined;
     return {
-      id: stringValue(event.id) ?? envelope.metadata.message_id,
-      type: 'reward-redemption',
+      id: subscriptionType.endsWith('.update')?envelope.metadata.message_id:stringValue(event.id) ?? envelope.metadata.message_id,
+      type: subscriptionType.endsWith('.update')?'reward-update':'reward-redemption',
       platform: 'twitch',
       channelId,
       channelName,

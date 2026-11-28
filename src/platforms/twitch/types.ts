@@ -35,7 +35,9 @@ export type TwitchEngagementSubscriptionType =
 export type TwitchCharitySubscriptionType = `channel.charity_campaign.${'start'|'progress'|'stop'|'donate'}`;
 export type TwitchPowerSubscriptionType = 'channel.channel_points_automatic_reward_redemption.add'|'channel.bits.use'|'channel.custom_power_up_redemption.add';
 export type TwitchBroadcastNoticeSubscriptionType = 'channel.shoutout.receive'|'channel.shoutout.create'|'channel.ad_break.begin';
+export type TwitchLifecycleSubscriptionType = 'channel.subscribe'|'channel.subscription.end'|'channel.subscription.gift'|'channel.subscription.message'|'channel.cheer'|'channel.channel_points_custom_reward_redemption.update'|`channel.channel_points_custom_reward.${'add'|'update'|'remove'}`;
 export type TwitchEventSubSubscriptionType =
+  | TwitchLifecycleSubscriptionType
   | TwitchBroadcastNoticeSubscriptionType
   | TwitchCharitySubscriptionType
   | TwitchPowerSubscriptionType
@@ -193,6 +195,8 @@ export interface TwitchCheermoteDefinition {
 export type TwitchCheermoteSet = Record<string, TwitchCheermoteDefinition>;
 
 export interface TwitchNormalizeContext {
+  /** Confirmed active dedicated subscriptions on this connection only. */
+  activeSubscriptions?:ReadonlySet<string>;
   emotes?: EmoteSet;
   getUserEmotes?: (platformUserId: string) => EmoteSet;
   cheermotes?: TwitchCheermoteSet;
@@ -232,6 +236,8 @@ export interface TwitchConnectOptions {
   subscriptions?: TwitchEventSubSubscriptionType[];
   /** Opt in to eligible read-only events for the authenticated broadcaster. */
   broadcasterEvents?: boolean;
+  /** Read current broadcaster widget/reward state after subscriptions establish. */
+  hydrateBroadcasterState?: boolean;
   /** Authoritative Twitch EventSub session audit cadence; 0 disables; default five minutes. */
   subscriptionReconcileIntervalMs?: number;
   emotes?: EmoteSet;

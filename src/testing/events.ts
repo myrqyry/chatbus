@@ -13,7 +13,7 @@ const CHAT_EVENT_TYPES: ReadonlySet<string> = new Set<ChatEventType>([
   'message-delete',
   'user-timeout',
   'user-ban',
-  'subscription',
+  'subscription','subscription-received','subscription-end','reward-update','reward-catalog',
   'gift-subscription',
   'cheer',
   'raid',

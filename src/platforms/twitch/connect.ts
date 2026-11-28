@@ -1,5 +1,6 @@
 import type { ChatEvent } from '../../types/chat';
 import { resolveTwitchChannel, resolveTwitchEventSubAuth } from './auth';
+import { fetchTwitchBroadcasterState } from './broadcaster-state';
 import { fetchTwitchCheermotes } from './cheermotes';
 import { normalizeTwitchHypeTrainEvent } from './hypeTrain';
 import { normalizeTwitchEventSubNotification } from './normalize';
@@ -8,7 +9,7 @@ import { createTwitchEventSubSocket } from './socket';
 import {
   DEFAULT_TWITCH_CHAT_SUBSCRIPTIONS,
   TWITCH_FOLLOW_SUBSCRIPTIONS,TWITCH_REWARD_SUBSCRIPTIONS,TWITCH_HYPE_TRAIN_SUBSCRIPTIONS,
-  TWITCH_STATE_SUBSCRIPTIONS,TWITCH_SHARED_CHAT_SUBSCRIPTIONS,TWITCH_ENGAGEMENT_SUBSCRIPTIONS,TWITCH_CHARITY_SUBSCRIPTIONS,TWITCH_POWER_SUBSCRIPTIONS,TWITCH_BROADCAST_NOTICE_SUBSCRIPTIONS,
+  TWITCH_STATE_SUBSCRIPTIONS,TWITCH_SHARED_CHAT_SUBSCRIPTIONS,TWITCH_ENGAGEMENT_SUBSCRIPTIONS,TWITCH_CHARITY_SUBSCRIPTIONS,TWITCH_POWER_SUBSCRIPTIONS,TWITCH_BROADCAST_NOTICE_SUBSCRIPTIONS,TWITCH_LIFECYCLE_SUBSCRIPTIONS,
   createTwitchEventSubSubscription,
   subscribeTwitchChat,
   twitchSubscriptionMissingScopeRequirements,
@@ -73,6 +74,13 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
   const acceptMessage = createMessageDeduper();
   const acceptNativeMessage = createMessageDeduper();
   const subscriptionState = new Map<string, TwitchEventSubSubscription>();
+  const activeSubscriptionTypes=new Set<string>();
+  const refreshActiveTypes=()=>{activeSubscriptionTypes.clear();for(const s of subscriptionState.values())if(s.status==='enabled')activeSubscriptionTypes.add(s.type);};
+  let hydrationSeen:Set<string>|undefined;
+  const hydrationKey=(event:ChatEvent)=>{
+    const data=event.data as {id?:string;reward?:{id?:string}}|undefined;
+    return event.type==='goal'?event.type+':'+(data?.id??''):event.type==='reward-catalog'?event.type+':'+(data?.reward?.id??''):event.type;
+  };
   let loadedCheermotes = options.cheermotes ?? options.getCheermotes?.() ?? {};
 
   const currentSubscriptions = (): TwitchEventSubSubscription[] => [...subscriptionState.values()];
@@ -81,6 +89,7 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
     reason: TwitchSubscriptionStateChange['reason'],
     subscription?: TwitchEventSubSubscription,
   ) => {
+    refreshActiveTypes();
     options.onSubscriptionStateChange?.({
       reason,
       subscriptions: currentSubscriptions(),
@@ -96,7 +105,7 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
   }
   const optionalTypes = options.broadcasterEvents && auth.userId === channel.id
     ? [...TWITCH_FOLLOW_SUBSCRIPTIONS,...TWITCH_REWARD_SUBSCRIPTIONS,...TWITCH_HYPE_TRAIN_SUBSCRIPTIONS,
-       ...TWITCH_STATE_SUBSCRIPTIONS,...TWITCH_SHARED_CHAT_SUBSCRIPTIONS,...TWITCH_ENGAGEMENT_SUBSCRIPTIONS,...TWITCH_CHARITY_SUBSCRIPTIONS,...TWITCH_POWER_SUBSCRIPTIONS,...TWITCH_BROADCAST_NOTICE_SUBSCRIPTIONS]
+       ...TWITCH_STATE_SUBSCRIPTIONS,...TWITCH_SHARED_CHAT_SUBSCRIPTIONS,...TWITCH_ENGAGEMENT_SUBSCRIPTIONS,...TWITCH_CHARITY_SUBSCRIPTIONS,...TWITCH_POWER_SUBSCRIPTIONS,...TWITCH_BROADCAST_NOTICE_SUBSCRIPTIONS,...TWITCH_LIFECYCLE_SUBSCRIPTIONS]
        .filter(type=>!requestedSubscriptions.includes(type)&&!twitchSubscriptionMissingScopeRequirements([type],auth.scopes??[]).length)
     : [];
   const requestedTypes = [...new Set([...requestedSubscriptions,...optionalTypes])];
@@ -214,6 +223,7 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
       emotes: options.getEmotes?.() ?? options.emotes,
       getUserEmotes: options.getUserEmotes,
       cheermotes: currentCheermotes(),
+      activeSubscriptions:activeSubscriptionTypes,
     };
     const event = normalizeTwitchEventSubNotification(envelope, context)
       ?? normalizeTwitchHypeTrainEvent(envelope, context);
@@ -225,7 +235,7 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
     )) return;
     // This connector receives from authenticated live EventSub. Pure
     // normalizers remain replay-safe and do not invent live provenance.
-    if (event) options.onEvent({ ...event, origin: 'live' });
+    if (event){hydrationSeen?.add(hydrationKey(event));options.onEvent({ ...event, origin: 'live' });}
   };
 
   const handleRevocation = (envelope: TwitchEventSubEnvelope) => {
@@ -274,7 +284,8 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
     onWelcome: async (session, { isServerReconnect }) => {
       sessionId = session.id;
       if (isServerReconnect) return;
-      subscriptionState.clear();
+      subscriptionState.clear();activeSubscriptionTypes.clear();
+      const seen=new Set<string>();hydrationSeen=seen;
       const subscriptions = await subscribeTwitchChat(session.id, channel.id, auth, {
         subscriptions: requestedSubscriptions,
         signal: requestController.signal,
@@ -289,10 +300,16 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
       for (const subscription of subscriptions) {
         subscriptionState.set(subscriptionKey(subscription), subscription);
       }
+      refreshActiveTypes();
       // Establish the required chat subscriptions first. Denial of optional
       // broadcaster events must not tear down a healthy chat connection.
-      const optional = await Promise.allSettled(optionalTypes.map(type=>
-        createTwitchEventSubSubscription(type,session.id,channel.id,auth,requestController.signal)));
+      const optional = await Promise.allSettled(optionalTypes.map(async type=>{
+        const result=await createTwitchEventSubSubscription(type,session.id,channel.id,auth,requestController.signal);
+        if(!stopped&&!requestController.signal.aborted&&sessionId===session.id&&result?.type===type&&result.status==='enabled'){
+          subscriptionState.set(subscriptionKey(result),result);activeSubscriptionTypes.add(type);
+        }
+        return result;
+      }));
       if(stopped||requestController.signal.aborted||sessionId!==session.id)return;
       let degraded=false;
       for(let i=0;i<optional.length;i++){
@@ -303,6 +320,16 @@ export async function connectTwitchChat(options: TwitchConnectOptions): Promise<
       }
       reportSubscriptionState(degraded?'degraded':'subscribed');
       startAudit();
+      if(options.broadcasterEvents&&options.hydrateBroadcasterState&&auth.userId===channel.id){
+        void fetchTwitchBroadcasterState(auth,channel,{signal:requestController.signal,
+          onUnavailable:kind=>{if(!stopped&&sessionId===session.id)options.onError?.(new Error('Twitch '+kind+' startup state unavailable'));},
+        }).then(events=>{
+          if(stopped||requestController.signal.aborted||sessionId!==session.id)return;
+          // A live snapshot/terminal received during startup is newer evidence.
+          for(const event of events)if(!seen.has(hydrationKey(event)))options.onEvent(event);
+          if(hydrationSeen===seen)hydrationSeen=undefined;
+        });
+      }else if(hydrationSeen===seen)hydrationSeen=undefined;
     },
   });
 

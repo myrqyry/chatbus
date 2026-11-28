@@ -304,7 +304,7 @@ export {
   twitchSubscriptionScopeRequirements,
   TWITCH_FOLLOW_SUBSCRIPTIONS,
   TWITCH_ENGAGEMENT_SUBSCRIPTIONS,
-  TWITCH_CHARITY_SUBSCRIPTIONS,TWITCH_POWER_SUBSCRIPTIONS,
+  TWITCH_CHARITY_SUBSCRIPTIONS,TWITCH_POWER_SUBSCRIPTIONS,TWITCH_LIFECYCLE_SUBSCRIPTIONS,TWITCH_BROADCAST_NOTICE_SUBSCRIPTIONS,
   TWITCH_HYPE_TRAIN_SUBSCRIPTIONS,
   TWITCH_SHARED_CHAT_SUBSCRIPTIONS,
   TWITCH_MODERATION_SUBSCRIPTIONS,
@@ -330,7 +330,7 @@ export type {
   TwitchEventSubSubscriptionType,
   TwitchFollowerSubscriptionType,
   TwitchEngagementSubscriptionType,
-  TwitchCharitySubscriptionType,TwitchPowerSubscriptionType,
+  TwitchCharitySubscriptionType,TwitchPowerSubscriptionType,TwitchLifecycleSubscriptionType,TwitchBroadcastNoticeSubscriptionType,
   TwitchHypeTrainSubscriptionType,
   TwitchModerationSubscriptionType,
   TwitchRewardSubscriptionType,
@@ -375,3 +375,6 @@ export type {KickRoleBodies,KickRoleKey} from "./platforms/kick/role-svg";
 
 export {browserPublicPlatforms,supportsBrowserPublicChat,createBrowserChatSource} from './browser';
 export type {BrowserPublicPlatform} from './browser';
+
+export {fetchTwitchBroadcasterState} from './platforms/twitch/broadcaster-state';
+export type {TwitchBroadcasterStateOptions} from './platforms/twitch/broadcaster-state';

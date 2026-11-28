@@ -1,5 +1,6 @@
 import { fetchWithTimeout } from '../../network/fetch';
 import type {
+  TwitchLifecycleSubscriptionType,
   TwitchAuth,TwitchBroadcastNoticeSubscriptionType,
   TwitchEngagementSubscriptionType,TwitchCharitySubscriptionType,TwitchPowerSubscriptionType,
   TwitchChatSubscriptionType,
@@ -48,6 +49,7 @@ export const TWITCH_ENGAGEMENT_SUBSCRIPTIONS:TwitchEngagementSubscriptionType[]=
 export const TWITCH_CHARITY_SUBSCRIPTIONS:TwitchCharitySubscriptionType[]=['channel.charity_campaign.start','channel.charity_campaign.progress','channel.charity_campaign.stop','channel.charity_campaign.donate'];
 export const TWITCH_POWER_SUBSCRIPTIONS:TwitchPowerSubscriptionType[]=['channel.channel_points_automatic_reward_redemption.add','channel.bits.use','channel.custom_power_up_redemption.add'];
 export const TWITCH_BROADCAST_NOTICE_SUBSCRIPTIONS:TwitchBroadcastNoticeSubscriptionType[]=['channel.shoutout.receive','channel.shoutout.create','channel.ad_break.begin'];
+export const TWITCH_LIFECYCLE_SUBSCRIPTIONS:TwitchLifecycleSubscriptionType[]=['channel.subscribe','channel.subscription.end','channel.subscription.gift','channel.subscription.message','channel.cheer','channel.channel_points_custom_reward_redemption.update','channel.channel_points_custom_reward.add','channel.channel_points_custom_reward.update','channel.channel_points_custom_reward.remove'];
 export const TWITCH_FOLLOW_SUBSCRIPTIONS: TwitchFollowerSubscriptionType[] = ['channel.follow'];
 export const TWITCH_REWARD_SUBSCRIPTIONS: TwitchRewardSubscriptionType[] = [
   'channel.channel_points_custom_reward_redemption.add',
@@ -90,6 +92,9 @@ const scopeRequirementsFor = (type: TwitchEventSubSubscriptionType): readonly (r
   if(type.startsWith('channel.goal.'))return [['channel:read:goals']];
   if(type.startsWith('channel.shoutout.'))return [['moderator:read:shoutouts','moderator:manage:shoutouts']];
   if(type==='channel.ad_break.begin')return [['channel:read:ads']];
+  if(type==='channel.subscribe'||type.startsWith('channel.subscription.'))return [['channel:read:subscriptions']];
+  if(type==='channel.cheer')return [['bits:read']];
+  if(type.startsWith('channel.channel_points_custom_reward'))return [['channel:read:redemptions','channel:manage:redemptions']];
   if (type === 'channel.ban') return [['channel:moderate']];
   return [];
 };

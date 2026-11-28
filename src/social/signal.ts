@@ -37,7 +37,9 @@ export interface SocialSignalV1 {
   /** Optional typed, bounded provider evidence; not raw event payloads. */
   hypeTrain?: {id:string;phase:HypeTrainPhase;level:number;total:number;progress?:number;goal?:number;expiresAtMs?:number};
   engagement?: EngagementEvidence;
-  reward?: {id?:string;title?:string;cost?:number;input?:string;kind?:'automatic'|'power-up'|'custom-power-up';type?:string};
+  subscription?:{phase:'start'|'resub'|'gift'|'end';gift?:boolean;anonymous?:boolean;months?:number;streakMonths?:number;durationMonths?:number;quote?:string};
+  cheer?:{anonymous?:boolean;quote?:string};
+  reward?: {id?:string;title?:string;cost?:number;input?:string;kind?:'automatic'|'power-up'|'custom-power-up';type?:string;status?:string;redemptionId?:string;enabled?:boolean};
   shoutout?:{direction:'sent'|'received';channelId:string;channelName:string;displayName?:string};
   adBreak?:{durationSeconds?:number;startedAtMs?:number;automatic?:boolean};
   charityDonation?:{campaignId?:string;name?:string};
@@ -132,13 +134,14 @@ function rewardEvidence(data:Record<string,unknown>):SocialSignalV1['reward'] {
   const reward=record(data.reward),id=boundedText(reward.id,128),title=boundedText(reward.title,100),
     cost=nonnegativeCount(reward.cost),input=boundedText(data.userInput,240);
   const type=boundedText(reward.type,64),kind=reward.kind;
-  const evidence:NonNullable<SocialSignalV1['reward']>={...(type?{type}:{}),...(kind==='automatic'||kind==='power-up'||kind==='custom-power-up'?{kind}:{}),...(id?{id}:{}),...(title?{title}:{}),...(cost!==undefined?{cost}:{}),...(input?{input}:{})};
+  const status=boundedText(data.status,32),redemptionId=boundedText(data.redemptionId,128);
+  const evidence:NonNullable<SocialSignalV1['reward']>={...(status?{status}:{}),...(redemptionId?{redemptionId}:{}),...(typeof reward.is_enabled==='boolean'?{enabled:reward.is_enabled}:{}),...(type?{type}:{}),...(kind==='automatic'||kind==='power-up'||kind==='custom-power-up'?{kind}:{}),...(id?{id}:{}),...(title?{title}:{}),...(cost!==undefined?{cost}:{}),...(input?{input}:{})};
   return Object.keys(evidence).length?evidence:undefined;
 }
 
 /** Known subscription tier only; never inferred from names, badges or prices. */
 function subscriptionTier(event: ChatEvent): string | undefined {
-  if (event.type !== 'subscription' && event.type !== 'gift-subscription') return undefined;
+  if (!['subscription','gift-subscription','subscription-received','subscription-end'].includes(event.type)) return undefined;
   if (!event.data || typeof event.data !== 'object' || Array.isArray(event.data)) return undefined;
   const data = event.data as Record<string, unknown>;
   const nested = data.event && typeof data.event === 'object' && !Array.isArray(data.event)
@@ -209,7 +212,13 @@ export function toSocialSignal(
     ...(Number.isSafeInteger(startedAtMs)&&startedAtMs>=0?{startedAtMs}:{}),
     ...(typeof data.automatic==='boolean'?{automatic:data.automatic}:{}),
   }:undefined;
-  const reward=event.type==='reward-redemption'?rewardEvidence(data):undefined;
+  const reward=['reward-redemption','reward-update','reward-catalog'].includes(event.type)?rewardEvidence(data):undefined;
+  const phase=data.subscriptionPhase,months=nonnegativeCount(data.months),streakMonths=nonnegativeCount(data.streakMonths),durationMonths=nonnegativeCount(data.durationMonths),quote=boundedText(data.quote,240);
+  const subscription:SocialSignalV1['subscription']=['subscription','gift-subscription','subscription-received','subscription-end'].includes(event.type)&&(phase==='start'||phase==='resub'||phase==='gift'||phase==='end')?{
+    phase,...(typeof data.gift==='boolean'?{gift:data.gift}:{}),...(typeof data.anonymous==='boolean'?{anonymous:data.anonymous}:{}),
+    ...(months!==undefined?{months}:{}),...(streakMonths!==undefined?{streakMonths}:{}),...(durationMonths!==undefined?{durationMonths}:{}),...(quote?{quote}:{}),
+  }:undefined;
+  const cheer:SocialSignalV1['cheer']=event.type==='cheer'&&(typeof data.anonymous==='boolean'||quote)?{...(typeof data.anonymous==='boolean'?{anonymous:data.anonymous}:{}),...(quote?{quote}:{})}:undefined;
   return {
     schemaVersion: 1,
     producer: 'chatbus',
@@ -244,6 +253,7 @@ export function toSocialSignal(
       } : {}),
     } } : {}),
     ...(charityDonation?{charityDonation:{campaignId:boundedText(data.campaignId,128),name:boundedText(data.charityName,100)}}:{}),
+    ...(subscription?{subscription}:{}),...(cheer?{cheer}:{}),
     ...(shoutout?{shoutout}:{}),
     ...(adBreak?{adBreak}:{}),
     ...(engagement?{engagement}:{}),

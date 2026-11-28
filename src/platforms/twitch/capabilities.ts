@@ -1,5 +1,5 @@
 import type { ChatEventType } from '../../types/chat';
-import { TWITCH_SHARED_CHAT_SUBSCRIPTIONS,TWITCH_ENGAGEMENT_SUBSCRIPTIONS,TWITCH_CHARITY_SUBSCRIPTIONS,TWITCH_POWER_SUBSCRIPTIONS,twitchSubscriptionScopeRequirements } from './subscriptions';
+import { TWITCH_SHARED_CHAT_SUBSCRIPTIONS,TWITCH_ENGAGEMENT_SUBSCRIPTIONS,TWITCH_CHARITY_SUBSCRIPTIONS,TWITCH_POWER_SUBSCRIPTIONS,TWITCH_LIFECYCLE_SUBSCRIPTIONS,twitchSubscriptionScopeRequirements } from './subscriptions';
 
 export type TwitchCapabilityId =
   | 'chat'
@@ -9,7 +9,7 @@ export type TwitchCapabilityId =
   | 'hype-train'
   | 'followers'
   | 'rewards'
-  | 'moderation' | 'polls' | 'predictions' | 'goals' | 'charity' | 'automatic-rewards' | 'power-ups' | 'shoutouts' | 'ads';
+  | 'moderation' | 'polls' | 'predictions' | 'goals' | 'charity' | 'automatic-rewards' | 'power-ups' | 'shoutouts' | 'ads' | 'subscriptions' | 'cheers' | 'reward-lifecycle';
 
 export type TwitchEventSubConditionKind = 'chat-user' | 'broadcaster' | 'moderator';
 
@@ -103,6 +103,14 @@ const engagementCapability=(id:'polls'|'predictions'|'goals',kind:'poll'|'predic
   })),
 });
 export const TWITCH_CAPABILITY_REGISTRY: Readonly<Record<TwitchCapabilityId, TwitchCapabilityDefinition>> = {
+  subscriptions:{id:'subscriptions',description:'Dedicated subscription lifecycle and gifts.',subscriptions:TWITCH_LIFECYCLE_SUBSCRIPTIONS.slice(0,4).map(type=>({
+    type,version:'1',condition:'broadcaster',scopeRequirements:[scope('channel:read:subscriptions')],
+    normalizedEventTypes:type==='channel.subscribe'?['subscription','subscription-received']:type==='channel.subscription.end'?['subscription-end']:type==='channel.subscription.gift'?['gift-subscription']:['subscription'],
+  }))},
+  cheers:{id:'cheers',description:'Dedicated cheer events, including anonymous cheers.',subscriptions:[{type:'channel.cheer',version:'1',condition:'broadcaster',scopeRequirements:[scope('bits:read')],normalizedEventTypes:['cheer']}]},
+  'reward-lifecycle':{id:'reward-lifecycle',description:'Reward catalog changes and redemption status updates.',subscriptions:TWITCH_LIFECYCLE_SUBSCRIPTIONS.slice(5).map(type=>({
+    type,version:'1',condition:'broadcaster',scopeRequirements:[scope('channel:read:redemptions','channel:manage:redemptions')],normalizedEventTypes:[type.endsWith('redemption.update')?'reward-update':'reward-catalog'],
+  }))},
   shoutouts:{id:'shoutouts',description:'Observe incoming and outgoing shoutouts.',subscriptions:['channel.shoutout.receive','channel.shoutout.create'].map(type=>({
     type,version:'1',condition:'moderator',scopeRequirements:[scope('moderator:read:shoutouts','moderator:manage:shoutouts')],normalizedEventTypes:['shoutout'],
   }))},
