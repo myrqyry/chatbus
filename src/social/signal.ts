@@ -37,6 +37,7 @@ export interface SocialSignalV1 {
   /** Optional typed, bounded provider evidence; not raw event payloads. */
   hypeTrain?: {id:string;phase:HypeTrainPhase;level:number;total:number;progress?:number;goal?:number;expiresAtMs?:number};
   engagement?: EngagementEvidence;
+  pin?: {phase:'set'|'remove';messageId?:string;text?:string;username?:string;pinnedBy?:string;expiresAtMs?:number};
   subscription?:{phase:'start'|'resub'|'gift'|'end';gift?:boolean;anonymous?:boolean;months?:number;streakMonths?:number;durationMonths?:number;expiresAtMs?:number;quote?:string};
   cheer?:{anonymous?:boolean;quote?:string};
   reward?: {id?:string;title?:string;cost?:number;input?:string;kind?:'automatic'|'power-up'|'custom-power-up';type?:string;status?:string;redemptionId?:string;enabled?:boolean;redeemedAtMs?:number;description?:string};
@@ -228,6 +229,10 @@ export function toSocialSignal(
     ...(boundedText(gift.tier,64)?{tier:boundedText(gift.tier,64)}:{}),...(boundedText(gift.quote,240)?{quote:boundedText(gift.quote,240)}:{}),
     ...(nonnegativeCount(gift.pinnedSeconds)!==undefined?{pinnedSeconds:nonnegativeCount(gift.pinnedSeconds)}:{})
   }:undefined;
+  const pinId=boundedText(data.messageId,128),pinText=boundedText(data.text,500),pinUser=boundedText(data.username,64);
+  const pin:SocialSignalV1['pin']=event.platform==='kick'?
+    event.type==='message-pin'&&pinId&&pinText&&pinUser?{phase:'set',messageId:pinId,text:pinText,username:pinUser,...(boundedText(data.pinnedBy,64)?{pinnedBy:boundedText(data.pinnedBy,64)}:{}),...(nonnegativeCount(data.expiresAtMs)!==undefined?{expiresAtMs:nonnegativeCount(data.expiresAtMs)}:{})}:
+    event.type==='message-unpin'||event.type==='message-delete'&&pinId?{phase:'remove',...(pinId?{messageId:pinId}:{})}:undefined:undefined;
   const cheer:SocialSignalV1['cheer']=event.type==='cheer'&&(typeof data.anonymous==='boolean'||quote)?{...(typeof data.anonymous==='boolean'?{anonymous:data.anonymous}:{}),...(quote?{quote}:{})}:undefined;
   return {
     schemaVersion: 1,
@@ -268,6 +273,7 @@ export function toSocialSignal(
     ...(shoutout?{shoutout}:{}),
     ...(adBreak?{adBreak}:{}),
     ...(engagement?{engagement}:{}),
+    ...(pin?{pin}:{}),
     ...(hypeTrain?{hypeTrain}:{}),
     ...(reward?{reward}:{}),
     ...(upstreamBatchId ? { upstreamBatchId } : {}),

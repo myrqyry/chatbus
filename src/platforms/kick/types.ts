@@ -114,6 +114,7 @@ export interface KickUserUnbannedPayload {
 export interface KickPinnedMessagePayload {
   message?: KickChatMessagePayload;
   duration?: number;
+  pinnedBy?: {username?:string};
 }
 
 export interface KickPollUpdatePayload {

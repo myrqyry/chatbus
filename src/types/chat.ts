@@ -169,6 +169,8 @@ export interface HypeTrainData {
 
 export type ChatEventType =
   | 'message'
+  | 'message-pin'
+  | 'message-unpin'
   | 'message-delete'
   | 'user-timeout'
   | 'user-ban'

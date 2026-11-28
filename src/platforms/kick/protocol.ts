@@ -14,6 +14,8 @@ const EVENT_NAME_TO_TYPE: Record<string, keyof KickProtocolDataByType> = {
   'App\\Events\\MessageDeletedEvent': 'MessageDeleted',
   'App\\Events\\UserBannedEvent': 'UserBanned',
   'App\\Events\\UserUnbannedEvent': 'UserUnbanned',
+  'PinnedMessageCreatedEvent': 'PinnedMessageCreated',
+  'PinnedMessageDeletedEvent': 'PinnedMessageDeleted',
   'App\\Events\\PinnedMessageCreatedEvent': 'PinnedMessageCreated',
   'App\\Events\\PinnedMessageDeletedEvent': 'PinnedMessageDeleted',
   'App\\Events\\PollUpdateEvent': 'PollUpdate',
@@ -57,7 +59,7 @@ export function parseKickPusherFrame(frame: string): KickProtocolEvent | null {
   if (!Object.hasOwn(EVENT_NAME_TO_TYPE, envelope.event) || !type) return null;
 
   const rawData = typeof envelope.data === 'string' ? parseJson(envelope.data) : envelope.data;
-  if (type==='PollDelete'&&Array.isArray(rawData)&&rawData.length===0)return {type,data:{}};
+  if ((type==='PollDelete'||type==='PinnedMessageDeleted')&&Array.isArray(rawData)&&rawData.length===0)return {type,data:{}};
   if (!isRecord(rawData) || !isValidPayload(type, rawData)) return null;
 
   return { type, data: rawData } as KickProtocolEvent;

@@ -253,10 +253,19 @@ export function normalizeKickEvent(
       return { ...base, type: 'system', data: { kind: 'host', ...event.data } };
     case 'UserUnbanned':
       return { ...base, id: event.data.id, type: 'system', data: { kind: 'user-unbanned', ...event.data } };
-    case 'PinnedMessageCreated':
-      return { ...base, type: 'system', data: { kind: 'pinned-message-created', ...event.data } };
+    case 'PinnedMessageCreated': {
+      const p=event.data.message;
+      if(!isRecord(p)||typeof p.id!=='string'||!p.id.trim()||p.id.length>128||
+         typeof p.content!=='string'||!p.content.trim()||!isRecord(p.sender)||
+         typeof p.sender.username!=='string'||!p.sender.username.trim())return null;
+      const text=parseKickMessageContent(p.content.slice(0,4096)).text.slice(0,500);
+      const duration=event.data.duration;
+      return {...base,type:'message-pin',data:{source:'kick-native',messageId:p.id,text,username:p.sender.username.slice(0,64),
+        pinnedBy:typeof event.data.pinnedBy?.username==='string'?event.data.pinnedBy.username.slice(0,64):undefined,
+        expiresAtMs:typeof duration==='number'&&Number.isSafeInteger(duration)&&duration>0&&duration<=86400?base.timestamp+duration*1000:undefined}};
+    }
     case 'PinnedMessageDeleted':
-      return { ...base, id: event.data.id, type: 'system', data: { kind: 'pinned-message-deleted', ...event.data } };
+      return {...base,type:'message-unpin',data:{source:'kick-native',messageId:event.data.message?.id??event.data.id}};
     case 'PollUpdate':
       return { ...base, type: 'system', data: { kind: 'poll-update', ...event.data } };
     case 'PollDelete':
