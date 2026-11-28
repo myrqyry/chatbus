@@ -176,6 +176,16 @@ export async function connectYouTubeChat(options: YouTubeConnectOptions): Promis
   let reconnectAttempt = 0;
   let offlineEventSent = false;
   const seen = new Set<string>();
+  let activePoll:ChatEvent|undefined,lastPollSignature='',lastPollAt=0;
+  const normalize=(item:YouTubeLiveChatMessageResource)=>normalizeYouTubeLiveChatMessage(item,{
+    liveChatId:liveChat.liveChatId,videoId:liveChat.videoId,channelId:liveChat.channelId,channelName:liveChat.channelName,
+  });
+  const endActivePoll=()=>{
+    if(!activePoll)return;
+    const data=activePoll.data as {id:string;title:string};
+    options.onEvent({...activePoll,timestamp:Date.now(),origin:'live',raw:undefined,data:{id:data.id,title:data.title,phase:'end',status:'no longer active'}});
+    activePoll=undefined;lastPollSignature='';lastPollAt=0;
+  };
 
   const eventKey = (item: YouTubeLiveChatMessageResource): string => {
     if (item.snippet?.type === 'giftEvent') {
@@ -230,30 +240,42 @@ export async function connectYouTubeChat(options: YouTubeConnectOptions): Promis
         const payload = await response.json() as YouTubeLiveChatListResponse;
         pageToken = payload.nextPageToken ?? pageToken;
 
+        const wasConnected=connected;
         if (!connected) {
           connected = true;
           options.onStateChange?.('connected');
         }
         reconnectAttempt = 0;
 
-        const pageItems = [
-          ...(payload.items ?? []),
-          ...(payload.activePollItem ? [payload.activePollItem] : []),
-        ];
-        const shouldEmit = !firstPage || options.emitInitialHistory !== false;
-        if (shouldEmit) {
-          for (const item of pageItems) {
-            if (!item.id || !remember(item)) continue;
-            const event = normalizeYouTubeLiveChatMessage(item, {
-              liveChatId: liveChat.liveChatId,
-              videoId: liveChat.videoId,
-              channelId: liveChat.channelId,
-              channelName: liveChat.channelName,
-            });
-            if (event) options.onEvent(event);
+        const current=payload.activePollItem?normalize(payload.activePollItem):null;
+        const currentActive=current?.type==='poll'&&(current.data as {phase?:string}).phase==='progress'?current:undefined;
+        const pageItems=[...(payload.items??[]),...(payload.activePollItem&&current?.type!=='poll'?[payload.activePollItem]:[])];
+        const shouldEmit=!firstPage||options.emitInitialHistory!==false;
+        for(const item of pageItems){
+          if(!item.id||!remember(item))continue;
+          const event=normalize(item);
+          if(!event)continue;
+          if(event.type==='poll'){
+            if(activePoll?.id===event.id&&(event.data as {phase?:string}).phase==='end'&&currentActive?.id!==event.id){
+              options.onEvent(event);activePoll=undefined;lastPollSignature='';lastPollAt=0;
+            }
+            continue;
           }
-        } else {
-          for (const item of pageItems) if (item.id) remember(item);
+          if(shouldEmit)options.onEvent(event);
+        }
+        if(activePoll&&activePoll.id!==currentActive?.id){
+          if(current?.type==='poll'&&current.id===activePoll.id&&(current.data as {phase?:string}).phase==='end'){
+            options.onEvent(current);activePoll=undefined;lastPollSignature='';lastPollAt=0;
+          }else endActivePoll();
+        }
+        if(currentActive){
+          const signature=JSON.stringify(currentActive.data),now=Date.now();
+          const changed=signature!==lastPollSignature;
+          if(changed||!wasConnected||now-lastPollAt>=60000){
+            options.onEvent({...currentActive,origin:!wasConnected||!changed?'replay':'live'});
+            lastPollSignature=signature;lastPollAt=now;
+          }
+          activePoll=currentActive;
         }
         firstPage = false;
 

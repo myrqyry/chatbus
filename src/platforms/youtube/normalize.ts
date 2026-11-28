@@ -182,6 +182,20 @@ export function normalizeYouTubeLiveChatMessage(
   }
 
   if (snippet.type === 'pollEvent') {
+    const details=snippet.pollDetails;
+    const metadata=details&&typeof details==='object'&&'metadata' in details?details.metadata:undefined;
+    if(metadata&&typeof metadata==='object'&&'status' in metadata&&'questionText' in metadata&&'options' in metadata){
+      const {status,questionText,options}=metadata;
+      if((status==='active'||status==='closed')&&typeof questionText==='string'&&questionText.trim()&&resource.id.length<=128&&Array.isArray(options)&&options.length>=2&&options.length<=4){
+        const choices=options.map((row:unknown,i:number)=>{
+          if(!row||typeof row!=='object'||!('optionText' in row)||typeof row.optionText!=='string'||!row.optionText.trim())return null;
+          const tally='tally' in row?row.tally:undefined;
+          const votes=typeof tally==='string'&&/^\d{1,16}$/.test(tally)?Number(tally):NaN;
+          return {id:String(i),title:row.optionText.trim().slice(0,100),...(Number.isSafeInteger(votes)&&votes>=0?{votes}:{})};
+        });
+        if(choices.every(c=>c!==null))return {...base,type:'poll',timestamp:now,user,data:{id:resource.id,phase:status==='active'?'progress':'end',status,title:questionText.trim().slice(0,160),choices}};
+      }
+    }
     return { ...base, type: 'system', user, data: { kind: 'poll', poll: snippet.pollDetails } };
   }
 
