@@ -211,6 +211,21 @@ export function normalizeKickEvent(
         data:{source:'kick-native',kickGift:{amount,name:text(gift.name,100),type:text(gift.type,64),tier:text(gift.tier,64),quote:typeof message==='string'?message.slice(0,240):undefined}},
       };
     }
+    case 'RewardRedeemed': {
+      const p=event.data,r=isRecord(p.reward)?p.reward:{};
+      const text=(v:unknown,max:number)=>typeof v==='string'&&v.trim()&&v.length<=max?v.trim():undefined;
+      const numericId=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>0?String(v):typeof v==='string'&&/^[1-9][0-9]{0,19}$/.test(v)?v:undefined;
+      const userId=numericId(p.user_id),username=text(p.username,64);
+      const flatId=text(p.reward_id,128),nestedId=text(r.id,128);
+      const title=text(p.reward_title,100)??text(r.title,100);
+      if(!userId||!username||!title||(flatId&&nestedId&&flatId!==nestedId))return null;
+      if(p.channel_id!==undefined&&(!numericId(p.channel_id)||context.channelId&&numericId(p.channel_id)!==context.channelId))return null;
+      const redemptionId=text(p.redemption_id,128);
+      const cost=typeof r.cost==='number'&&Number.isSafeInteger(r.cost)&&r.cost>=0?r.cost:undefined;
+      return {...base,type:'reward-redemption',id:redemptionId,
+        user:{platform:'kick',id:userId,username,displayName:username},
+        data:{source:'kick-native',redemptionId,userInput:typeof p.user_input==='string'?p.user_input.slice(0,240):undefined,reward:{id:flatId??nestedId,title,cost}}};
+    }
     case 'ChannelSubscription':
       return {
         ...base,

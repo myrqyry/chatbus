@@ -38,6 +38,7 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
   const maxBufferedEvents = 500;
   const seenMessageIds = new Set<string>();
   const seenGiftTransactions = new Set<string>();
+  const seenRedemptions = new Set<string>();
   const remember = (id: string) => {
     seenMessageIds.add(id);
     while (seenMessageIds.size > 500) {
@@ -55,6 +56,11 @@ export async function connectKickChat(options: KickConnectOptions): Promise<Kick
       if (seenGiftTransactions.has(event.id)) return;
       seenGiftTransactions.add(event.id);
       if (seenGiftTransactions.size>2048) seenGiftTransactions.delete(seenGiftTransactions.values().next().value!);
+    }
+    if (event.type==='reward-redemption'&&event.id) {
+      if (seenRedemptions.has(event.id)) return;
+      seenRedemptions.add(event.id);
+      if (seenRedemptions.size>2048) seenRedemptions.delete(seenRedemptions.values().next().value!);
     }
     options.onEvent(event);
   };

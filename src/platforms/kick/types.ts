@@ -74,6 +74,18 @@ export interface KickNativeGiftPayload {
   created_at?: unknown;
 }
 
+/** Public native redemption notice; fields are validated before normalization. */
+export interface KickRewardRedeemedPayload {
+  reward_id?: unknown;
+  reward_title?: unknown;
+  reward?: unknown;
+  user_id?: unknown;
+  username?: unknown;
+  channel_id?: unknown;
+  user_input?: unknown;
+  redemption_id?: unknown;
+}
+
 export interface KickStreamHostPayload {
   chatroom_id?: number;
   optional_message?: string;
@@ -118,6 +130,7 @@ export interface KickProtocolDataByType {
   Subscription: KickSubscriptionPayload;
   GiftedSubscriptions: KickGiftedSubscriptionsPayload;
   KicksGifted: KickNativeGiftPayload;
+  RewardRedeemed: KickRewardRedeemedPayload;
   ChannelSubscription: KickChannelSubscriptionPayload;
   LuckyGiftedSubscriptions: KickLuckyGiftedSubscriptionsPayload;
   StreamHost: KickStreamHostPayload;

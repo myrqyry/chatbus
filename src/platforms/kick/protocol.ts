@@ -6,6 +6,8 @@ const EVENT_NAME_TO_TYPE: Record<string, keyof KickProtocolDataByType> = {
   'App\\Events\\GiftedSubscriptionsEvent': 'GiftedSubscriptions',
   'GiftedSubscriptionsEvent': 'GiftedSubscriptions',
   'KicksGifted': 'KicksGifted',
+  'RewardRedeemedEvent': 'RewardRedeemed',
+  'App\\Events\\RewardRedeemedEvent': 'RewardRedeemed',
   'App\\Events\\ChannelSubscriptionEvent': 'ChannelSubscription',
   'App\\Events\\LuckyUsersWhoGotGiftSubscriptionsEvent': 'LuckyGiftedSubscriptions',
   'App\\Events\\StreamHostEvent': 'StreamHost',
