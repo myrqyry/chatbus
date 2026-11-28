@@ -130,3 +130,23 @@ Seven tests exercised real loopback HTTP, generated RSA signatures and
 SQLite, including chunked oversize, callback failure/retry, duplicate
 headers, registry isolation and drain behavior. This is not evidence of
 actual Kick-originated delivery.
+
+## Transport ownership
+
+createKickTransportArbiter operates per host-verified binding of Kick
+slug, official broadcaster user ID and native channel ID. These are
+different identity namespaces. It rejects foreign events and rewrites
+accepted official events to the native channel identity for consumers.
+Native chat/moderation remains preferred while native transport is
+connected, with official fallback while disconnected. Exact chat
+message IDs are remembered for ten minutes (bounded at 10,000 entries).
+No username, text or time similarity matching is used.
+
+A host may explicitly assign subscription ownership to official delivery
+only while BOTH new and renewal feeds are confirmed healthy; gift
+ownership is independent. Revoking that coverage restores native fallback.
+Official-only families remain available irrespective of native connection.
+Registration alone is not proof of delivery health. The caller owns
+coverage updates. Changes in ownership can still race for events without
+a shared provider ID, and native-native duplicates without an ID are not
+resolved by this arbiter. No live delivery is enabled by this change.

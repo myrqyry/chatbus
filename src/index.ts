@@ -381,3 +381,5 @@ export type {TwitchBroadcasterStateOptions} from './platforms/twitch/broadcaster
 
 export {normalizeKickOfficialEvent,KICK_OFFICIAL_EVENTS} from './platforms/kick/official-events';
 export type {KickOfficialEventType} from './platforms/kick/official-events';
+export {createKickTransportArbiter} from './platforms/kick/arbitration';
+export type {KickTransportBinding,KickTransportArbiter} from './platforms/kick/arbitration';
